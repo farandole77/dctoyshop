@@ -125,18 +125,31 @@ export default function RaidScheduler() {
   const handleDeletePost = async (postId: number) => { if (!confirm("삭제하시겠습니까?")) return; await supabase.from('posts').delete().eq('id', postId); fetchPosts(); };
   
   // ★ 레이드 생성 (최대 인원 포함)
-  const handleCreate = async () => { 
-    if (!raidTitle) return alert('입력해주세요!'); 
-    await supabase.from('raids').insert([{ 
+// 기존 handleCreate를 지우고 이걸로 바꾸세요!
+  const handleCreate = async () => {
+    if (!raidTitle) return alert('레이드 이름을 입력해주세요!');
+    
+    // 1. Supabase에 저장 요청
+    const { data, error } = await supabase.from('raids').insert([{ 
       title: raidTitle, 
       start_time: selectedDate, 
       created_by_email: user.email,
-      max_members: maxMembers // 4 or 8
-    }]); 
-    setRaidTitle(''); 
-    setMaxMembers(4); // 초기화
-    setIsCreateModalOpen(false); 
-    fetchRaids(); 
+      max_members: maxMembers // ★ 이 부분이 문제일 수 있음
+    }]).select(); // .select()를 붙여야 저장된 결과를 확인 가능
+
+    // 2. 에러가 났다면? 경고창 띄우기 (범인 색출)
+    if (error) {
+      console.error("저장 실패:", error);
+      alert(`저장 실패! 오류 내용: ${error.message}`);
+      return; // 팝업 끄지 말고 멈춤
+    }
+
+    // 3. 성공했다면?
+    alert("등록 성공!"); // 확인용 알림
+    setRaidTitle('');
+    setMaxMembers(4);
+    setIsCreateModalOpen(false);
+    fetchRaids();
   };
   
   const handleEventClick = async (arg: any) => { 
