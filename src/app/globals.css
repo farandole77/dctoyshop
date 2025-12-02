@@ -1,0 +1,96 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ... 기존 코드 아래에 추가하세요 ... */
+
+/* 캘린더 전체 폰트 및 테두리 제거 */
+.fc {
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  border: none !important;
+}
+
+/* 캘린더 헤더 (월/년도) 스타일 */
+.fc-toolbar-title {
+  font-size: 1.5rem !important;
+  font-weight: 200 !important;
+  color: #314157;
+}
+
+/* 요일 (Sun, Mon...) 헤더 */
+.fc-col-header-cell {
+  background-color: transparent !important;
+  border: none !important;
+  padding: 10px 0 !important;
+  color: #6b7280;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* 날짜 칸 스타일 */
+.fc-daygrid-day {
+  border: 1px solid #f3f4f6 !important; /* 아주 연한 회색 테두리 */
+}
+.fc-daygrid-day-frame {
+  padding: 4px;
+}
+
+/* 오늘 날짜 강조 */
+.fc-day-today {
+  background-color: #dce9fa !important; /* 연한 파란색 배경 */
+}
+
+/* 이벤트(파란 바) 스타일 - 둥글게 */
+.fc-event {
+  border-radius: 8px !important;
+  padding: 2px 4px !important;
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+  border: none !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* 버튼 스타일 (Prev, Next, Today) */
+.fc-button {
+  background-color: white !important;
+  border: 1px solid #e5e7eb !important;
+  color: #374151 !important;
+  font-weight: 600 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  transition: all 0.2s;
+}
+.fc-button:hover {
+  background-color: #f9fafb !important;
+  transform: translateY(-1px);
+}
+.fc-button-active {
+  background-color: #57a0ff !important;
+  color: white !important;
+  border-color: #57a0ff !important;
+}

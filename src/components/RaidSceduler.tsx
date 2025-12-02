@@ -1,0 +1,409 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import { supabase } from '@/lib/supabase';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+
+const GAME_CLASSES = [
+  "전사", "대검전사", "검술사",
+  "궁수", "석궁사수", "장궁병",
+  "마법사", "화염술사", "빙결술사", "전격술사",
+  "힐러", "사제", "수도사", "암흑술사",
+  "음유시인", "댄서", "악사",
+  "도적", "격투가", "듀얼블레이드"
+];
+
+const CLASS_IMAGES: { [key: string]: string } = {
+  "전사": "/class-icons/warrior.png",
+  "대검전사": "/class-icons/greatsword.png",
+  "검술사": "/class-icons/blader.png",
+  "궁수": "/class-icons/archer.png",
+  "석궁사수": "/class-icons/crossbow.png",
+  "장궁병": "/class-icons/longbow.png",
+  "마법사": "/class-icons/mage.png",
+  "화염술사": "/class-icons/fire-wizard.png",
+  "빙결술사": "/class-icons/ice-wizard.png",
+  "전격술사": "/class-icons/lightning-wizard.png",
+  "힐러": "/class-icons/healer.png",
+  "사제": "/class-icons/priest.png",
+  "수도사": "/class-icons/monk.png",
+  "암흑술사": "/class-icons/warlock.png",
+  "음유시인": "/class-icons/bard.png",
+  "댄서": "/class-icons/dancer.png",
+  "악사": "/class-icons/musician.png",
+  "도적": "/class-icons/rogue.png",
+  "격투가": "/class-icons/fighter.png",
+  "듀얼블레이드": "/class-icons/dualblade.png"
+};
+
+// 아이콘들
+const Icons = {
+  Calendar: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+  ),
+  Chart: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+  ),
+  Board: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+  ),
+  Trash: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+  ),
+  Close: () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+  ),
+  Edit: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+  ),
+  Logout: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+  ),
+  Plus: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+  ),
+  // ★ 던컨의 장난감가게 로고 아이콘 (주사위)
+  ToyIcon: () => (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+      <path d="M16 8h.01"></path>
+      <path d="M8 8h.01"></path>
+      <path d="M8 16h.01"></path>
+      <path d="M16 16h.01"></path>
+      <path d="M12 12h.01"></path>
+    </svg>
+  )
+};
+
+export default function RaidScheduler() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [myProfile, setMyProfile] = useState<any>(null);
+  const [raids, setRaids] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'calendar' | 'stats' | 'board'>('calendar');
+  
+  // 모달 상태
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [newNickname, setNewNickname] = useState('');
+  const [newClass, setNewClass] = useState(GAME_CLASSES[0]);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [raidTitle, setRaidTitle] = useState('');
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedRaid, setSelectedRaid] = useState<any>(null);
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [statsData, setStatsData] = useState<any[]>([]);
+
+  // 게시판 상태
+  const [posts, setPosts] = useState<any[]>([]);
+  const [isWriteModalOpen, setIsWriteModalOpen] = useState(false);
+  const [postTitle, setPostTitle] = useState('');
+  const [postContent, setPostContent] = useState('');
+
+  useEffect(() => { initialize(); }, []);
+  useEffect(() => {
+    if (activeTab === 'stats') fetchStats();
+    if (activeTab === 'board') fetchPosts();
+  }, [activeTab]);
+
+  const initialize = async () => {
+    setIsLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) { setUser(session.user); await loadProfile(session.user.id); }
+    await fetchRaids();
+    setIsLoading(false);
+  };
+
+  const loadProfile = async (userId: string) => {
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (profile) setMyProfile(profile); else setIsProfileModalOpen(true);
+  };
+
+  const handleLogin = async () => { await supabase.auth.signInWithOAuth({ provider: 'google', options: { queryParams: { access_type: 'offline', prompt: 'consent' } } }); };
+  const handleLogout = async () => { await supabase.auth.signOut(); window.location.reload(); };
+
+  const handleSaveProfile = async () => {
+    if (!newNickname) return alert("닉네임을 입력해주세요!");
+    const newProfile = { id: user.id, nickname: newNickname, game_class: newClass };
+    const { error } = await supabase.from('profiles').upsert([newProfile]);
+    if (!error) { setMyProfile(newProfile); setIsProfileModalOpen(false); }
+  };
+
+  const openEditProfile = () => { if (myProfile) { setNewNickname(myProfile.nickname); setNewClass(myProfile.game_class); } setIsProfileModalOpen(true); };
+
+  const fetchRaids = async () => {
+    const { data } = await supabase.from('raids').select('*');
+    if (data) { setRaids(data.map((raid) => ({ id: raid.id, title: raid.title, date: raid.start_time.split('T')[0], created_by_email: raid.created_by_email, backgroundColor: '#4F46E5', borderColor: 'transparent' }))); }
+  };
+
+  const fetchStats = async () => {
+    const { data: participants } = await supabase.from('participants').select('user_name, game_class');
+    if (participants) {
+      const countMap: { [key: string]: { count: number; job: string } } = {};
+      participants.forEach((p) => { if (countMap[p.user_name]) countMap[p.user_name].count += 1; else countMap[p.user_name] = { count: 1, job: p.game_class || '모험가' }; });
+      const chartData = Object.keys(countMap).map((name) => ({ name: name, count: countMap[name].count, job: countMap[name].job })).sort((a, b) => b.count - a.count);
+      setStatsData(chartData);
+    }
+  };
+
+  const fetchPosts = async () => { const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false }); if (data) setPosts(data); };
+  const handleWritePost = async () => {
+    if (!postTitle || !postContent) return alert("내용을 입력해주세요.");
+    await supabase.from('posts').insert([{ title: postTitle, content: postContent, author_name: myProfile.nickname, author_class: myProfile.game_class, user_id: user.id }]);
+    setPostTitle(''); setPostContent(''); setIsWriteModalOpen(false); fetchPosts();
+  };
+  const handleDeletePost = async (postId: number) => { if (!confirm("삭제하시겠습니까?")) return; await supabase.from('posts').delete().eq('id', postId); fetchPosts(); };
+
+  const handleCreate = async () => { if (!raidTitle) return alert('입력해주세요!'); await supabase.from('raids').insert([{ title: raidTitle, start_time: selectedDate, created_by_email: user.email }]); setRaidTitle(''); setIsCreateModalOpen(false); fetchRaids(); };
+  const handleEventClick = async (arg: any) => {
+    const raidId = arg.event.id; const title = arg.event.title; const createdBy = arg.event.extendedProps.created_by_email;
+    const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId);
+    setSelectedRaid({ id: raidId, title, created_by_email: createdBy }); setParticipants(data || []); setIsDetailModalOpen(true);
+  };
+  const handleJoin = async () => { if (!myProfile) return alert('프로필 필요'); await supabase.from('participants').insert([{ raid_id: selectedRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); refreshParticipants(selectedRaid.id); };
+  const handleLeave = async () => { if (!confirm("취소?")) return; await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email); refreshParticipants(selectedRaid.id); };
+  const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
+  const refreshParticipants = async (raidId: any) => { const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setParticipants(data || []); };
+  const renderAvatar = (gameClass: string, size = "w-10 h-10") => { let imagePath = CLASS_IMAGES[gameClass] || "/class-icons/default.png"; return <img src={imagePath} className={`${size} rounded-full object-cover border border-gray-200 bg-white`} alt={gameClass} onError={(e) => { (e.target as HTMLImageElement).src = "/class-icons/default.png"; }} />; };
+
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-xl font-bold text-gray-400">로딩중...</div>;
+  if (!user) return <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50 p-4"><button onClick={handleLogin} className="bg-white border p-4 rounded-xl font-bold shadow-sm">구글 로그인</button></div>;
+
+  const isJoined = participants.some(p => p.user_email === user.email);
+  const isMyRaid = selectedRaid?.created_by_email === user.email;
+
+  // 상단 탭 버튼 컴포넌트
+  const TabButton = ({ tabName, label, icon }: { tabName: string, label: string, icon: any }) => (
+    <button 
+      onClick={() => setActiveTab(tabName as any)} 
+      className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold transition-all duration-200 text-sm md:text-base
+        ${activeTab === tabName 
+          ? 'bg-black text-white shadow-md transform scale-105' 
+          : 'text-gray-500 hover:bg-gray-100 hover:text-black'}`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+
+  return (
+    // 전체 레이아웃: 상하 배치 (flex-col)
+    <div className="flex flex-col h-screen bg-[#f3f4f6] overflow-hidden">
+      
+      {/* ★ 상단 헤더 (네비게이션 바) */}
+      <header className="h-16 md:h-20 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-10 shrink-0 z-30 shadow-sm">
+        
+        {/* 로고 영역 */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg transform rotate-3 hover:rotate-0 transition-all cursor-pointer">
+            <Icons.ToyIcon />
+          </div>
+          <span className="hidden md:block font-extrabold text-xl tracking-tight text-gray-900">던컨의 장난감가게</span>
+        </div>
+
+        {/* 중앙 탭 메뉴 */}
+        <nav className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-full border border-gray-100">
+          <TabButton tabName="calendar" label="일정" icon={<Icons.Calendar />} />
+          <TabButton tabName="stats" label="통계" icon={<Icons.Chart />} />
+          <TabButton tabName="board" label="팁" icon={<Icons.Board />} />
+        </nav>
+
+        {/* 우측 프로필 영역 */}
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex flex-col items-end cursor-pointer group" onClick={openEditProfile}>
+            <div className="text-sm font-bold text-gray-800 flex items-center gap-1 group-hover:text-indigo-600 transition-colors">
+              {myProfile ? myProfile.nickname : '설정필요'} <Icons.Edit />
+            </div>
+            <div className="text-xs text-gray-500 font-medium">{myProfile ? myProfile.game_class : ''}</div>
+          </div>
+          <div className="relative group cursor-pointer" onClick={openEditProfile}>
+            {myProfile ? renderAvatar(myProfile.game_class, "w-10 h-10") : <div className="w-10 h-10 bg-gray-200 rounded-full"/>}
+            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+          </div>
+          <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all" title="로그아웃">
+            <Icons.Logout />
+          </button>
+        </div>
+      </header>
+
+      {/* 메인 콘텐츠 영역 (상단 헤더 아래 꽉 차게) */}
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 max-w-7xl mx-auto w-full">
+        
+        {/* 탭별 내용 표시 */}
+        {activeTab === 'calendar' ? (
+          <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-full flex flex-col">
+            <FullCalendar
+              plugins={[dayGridPlugin, interactionPlugin]}
+              initialView="dayGridMonth"
+              events={raids}
+              dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }}
+              eventClick={handleEventClick}
+              height="100%"
+              headerToolbar={{ left: 'prev', center: 'title', right: 'next' }}
+            />
+          </div>
+        ) : activeTab === 'stats' ? (
+          <div className="space-y-6">
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 h-[450px]">
+              <h3 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2"><Icons.Chart /> 참여 랭킹 TOP</h3>
+              <ResponsiveContainer width="100%" height="90%">
+                <BarChart data={statsData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 14, fontWeight: 'bold', fill: '#374151' }} />
+                  <Tooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }} />
+                  <Bar dataKey="count" barSize={30} radius={[0, 10, 10, 0]}>
+                    {statsData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={index < 3 ? ['#FFD700', '#C0C0C0', '#CD7F32'][index] : '#818cf8'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {statsData.map((user, index) => (
+                <div key={user.name} className="bg-white p-5 rounded-2xl flex items-center justify-between shadow-sm border border-gray-100 hover:border-indigo-200 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${index < 3 ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>{index + 1}</span>
+                    <div>
+                      <div className="font-bold text-gray-900">{user.name}</div>
+                      <div className="text-xs text-gray-500 font-medium">{user.job}</div>
+                    </div>
+                  </div>
+                  <div className="text-indigo-600 font-extrabold text-lg">{user.count}회</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="relative min-h-full pb-20">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-800">💡 꿀팁 공유 게시판</h3>
+              <button onClick={() => setIsWriteModalOpen(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg active:scale-95">
+                <Icons.Plus /> 팁 작성하기
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-4">
+              {posts.length === 0 ? <div className="text-center text-gray-400 py-20 bg-white rounded-3xl border border-gray-100">아직 작성된 팁이 없습니다.<br/>첫 번째 팁을 공유해보세요!</div> : null}
+              {posts.map(post => (
+                <div key={post.id} className="bg-white p-6 rounded-3xl border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all group">
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="text-lg font-bold text-gray-900">{post.title}</h3>
+                    {post.user_id === user.id && (
+                      <button onClick={() => handleDeletePost(post.id)} className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-all"><Icons.Trash /></button>
+                    )}
+                  </div>
+                  <p className="text-gray-600 text-sm whitespace-pre-wrap mb-5 leading-relaxed">{post.content}</p>
+                  <div className="flex items-center gap-3 pt-4 border-t border-gray-50">
+                    {renderAvatar(post.author_class, "w-8 h-8")}
+                    <div>
+                      <span className="block text-xs font-bold text-gray-700">{post.author_name}</span>
+                      <span className="block text-[10px] text-gray-400">{post.author_class} · {post.created_at.split('T')[0]}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* --- 모달들 (디자인 동일) --- */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center">
+            <h2 className="text-2xl font-bold mb-2 text-gray-900">{myProfile ? '프로필 수정' : '환영합니다!'}</h2>
+            <p className="text-gray-500 mb-8 text-sm">정보를 입력해주세요.</p>
+            <div className="space-y-5">
+              <div className="text-left">
+                <label className="block text-xs font-bold text-gray-400 mb-2 ml-1">닉네임</label>
+                <input className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} />
+              </div>
+              <div className="text-left">
+                <label className="block text-xs font-bold text-gray-400 mb-2 ml-1">직업</label>
+                <select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>
+                  {GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}
+                </select>
+              </div>
+              <div className="bg-indigo-50 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-indigo-100">
+                <span className="text-xs font-bold text-indigo-400">미리보기</span>
+                {renderAvatar(newClass, "w-16 h-16")}
+                <span className="text-indigo-900 font-bold text-sm">{newClass}</span>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-8">
+              {myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200">취소</button>}
+              <button onClick={handleSaveProfile} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">저장</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative">
+            <h2 className="text-2xl font-bold mb-1 text-gray-900">일정 등록</h2>
+            <p className="text-indigo-500 mb-8 font-bold text-sm bg-indigo-50 inline-block px-3 py-1 rounded-full">{selectedDate}</p>
+            <input className="w-full bg-gray-50 p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-lg" placeholder="레이드 이름" value={raidTitle} onChange={e => setRaidTitle(e.target.value)} autoFocus />
+            <div className="flex gap-3">
+              <button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button>
+              <button onClick={handleCreate} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">등록</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isWriteModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative">
+            <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2"><Icons.Board /> 팁 작성하기</h2>
+            <input className="w-full bg-gray-50 p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold" placeholder="제목을 입력하세요" value={postTitle} onChange={e => setPostTitle(e.target.value)} autoFocus />
+            <textarea className="w-full bg-gray-50 p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-indigo-500 transition-all h-40 resize-none" placeholder="자유롭게 내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} />
+            <div className="flex gap-3">
+              <button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button>
+              <button onClick={handleWritePost} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">작성완료</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDetailModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 to-blue-500"></div>
+            <div className="absolute top-5 right-5 flex gap-2">
+              {isMyRaid && (<button onClick={handleDeleteRaid} className="text-gray-300 hover:text-red-500 p-2 transition-all"><Icons.Trash /></button>)}
+              <button onClick={() => setIsDetailModalOpen(false)} className="text-gray-300 hover:text-black p-2 transition-all"><Icons.Close /></button>
+            </div>
+            <h2 className="text-2xl font-extrabold mb-6 pr-20 text-gray-900 leading-tight">{selectedRaid?.title}</h2>
+            <div className="bg-gray-50 p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-gray-100">
+              <p className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider flex items-center justify-between"><span>참가자 ({participants.length})</span></p>
+              <div className="space-y-3">
+                {participants.length === 0 ? <p className="text-gray-400 text-sm text-center py-4">참가자가 없습니다.</p> : null}
+                {participants.map(p => (
+                  <div key={p.id} className="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-gray-100/50">
+                    <div className="flex items-center gap-4">
+                      {renderAvatar(p.game_class, "w-10 h-10")}
+                      <div className="flex flex-col">
+                        <span className="font-bold text-sm text-gray-900">{p.user_name}</span>
+                        <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide bg-indigo-50 px-2 py-0.5 rounded-md w-fit mt-0.5">{p.game_class}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {isJoined ? (
+              <button onClick={handleLeave} className="w-full py-4 bg-red-50 text-red-500 rounded-2xl font-bold hover:bg-red-100 text-lg transition-all">참가 취소</button>
+            ) : (
+              <button onClick={handleJoin} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">참가하기</button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
