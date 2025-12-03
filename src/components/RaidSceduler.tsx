@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react'; // useRef 추가
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import listPlugin from '@fullcalendar/list'; // ★ 리스트 플러그인 추가
 import { supabase } from '@/lib/supabase';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-// ★ 1. 이미지 최적화 컴포넌트 불러오기
 import Image from 'next/image';
 
 const GAME_CLASSES = [
@@ -41,7 +41,6 @@ const Icons = {
   Edit: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>),
   Logout: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>),
   Plus: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>),
-  // ToyIcon은 이제 안 쓰므로 삭제했습니다.
   GoogleCal: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path><path d="M10 16h4"></path><path d="M12 14v4"></path></svg>),
   UserGroup: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>),
   Camera: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>)
@@ -54,6 +53,9 @@ export default function RaidScheduler() {
   const [raids, setRaids] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'calendar' | 'stats' | 'board'>('calendar');
   
+  // ★ 캘린더 제어용 Ref 추가
+  const calendarRef = useRef<FullCalendar>(null);
+
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [newNickname, setNewNickname] = useState('');
   const [newClass, setNewClass] = useState(GAME_CLASSES[0]);
@@ -89,6 +91,28 @@ export default function RaidScheduler() {
   useEffect(() => {
     if (isCreateModalOpen) setSelectedDungeon(DUNGEON_DATA[raidType][0]);
   }, [raidType, isCreateModalOpen]);
+
+  // ★ 화면 크기 변경 감지 및 달력 뷰 변경
+  useEffect(() => {
+    const handleResize = () => {
+      if (calendarRef.current) {
+        const calendarApi = calendarRef.current.getApi();
+        // 화면 너비가 768px 미만(모바일)이면 'listWeek', 이상이면 'dayGridMonth'
+        if (window.innerWidth < 768) {
+          calendarApi.changeView('listWeek');
+        } else {
+          calendarApi.changeView('dayGridMonth');
+        }
+      }
+    };
+
+    // 초기 실행
+    handleResize();
+
+    // 리사이즈 이벤트 리스너 추가
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [activeTab]); // 탭이 바뀔 때도 체크
 
   const initialize = async () => {
     setIsLoading(true);
@@ -231,15 +255,8 @@ export default function RaidScheduler() {
     <div className="flex flex-col h-screen bg-[#f3f4f6] overflow-hidden">
       <header className="h-16 md:h-20 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-10 shrink-0 z-30 shadow-sm relative">
         <div className="flex items-center gap-3">
-          {/* ★ 2. 기존 주사위 아이콘 대신 곰돌이 이미지 사용 */}
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg transform rotate-3 hover:rotate-0 transition-all cursor-pointer p-1">
-            <Image 
-              src="/icon.png" 
-              alt="던컨의 장난감가게 로고" 
-              width={32} 
-              height={32} 
-              className="w-full h-full object-contain rounded-lg"
-            />
+            <Image src="/icon.png" alt="던컨의 장난감가게 로고" width={32} height={32} className="w-full h-full object-contain rounded-lg" />
           </div>
           <span className="font-extrabold text-lg md:text-xl tracking-tight text-gray-900">던컨의 장난감가게</span>
         </div>
@@ -256,7 +273,19 @@ export default function RaidScheduler() {
 
       <main className="flex-1 overflow-y-auto p-4 md:p-8 max-w-7xl mx-auto w-full pb-24 md:pb-8">
         {activeTab === 'calendar' ? (
-          <div className="bg-white p-4 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-full flex flex-col"><FullCalendar plugins={[dayGridPlugin, interactionPlugin]} initialView="dayGridMonth" events={raids} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} /></div>
+          <div className="bg-white p-4 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-full flex flex-col">
+            {/* ★ ref={calendarRef} 추가: 달력 제어권 확보 */}
+            <FullCalendar 
+              ref={calendarRef} 
+              plugins={[dayGridPlugin, interactionPlugin, listPlugin]} // listPlugin 추가
+              initialView="dayGridMonth" // PC 기본값
+              events={raids} 
+              dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} 
+              eventClick={handleEventClick} 
+              height="100%" 
+              headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} 
+            />
+          </div>
         ) : activeTab === 'stats' ? (
           <div className="space-y-6">
             <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-[500px]">
@@ -275,13 +304,7 @@ export default function RaidScheduler() {
         ) : (
           <div className="relative min-h-full pb-20">
             <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-gray-800">💡 꿀팁 공유 게시판</h3><button onClick={() => setIsWriteModalOpen(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95"><Icons.Plus /> <span className="hidden md:inline">팁 작성하기</span><span className="md:hidden">글쓰기</span></button></div>
-            <div className="grid grid-cols-1 gap-4">{posts.length === 0 ? <div className="text-center text-gray-400 py-20 bg-white rounded-3xl border border-gray-100">아직 작성된 팁이 없습니다.</div> : null}{posts.map(post => (<div key={post.id} className="bg-white p-6 rounded-3xl border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all group"><div className="flex justify-between items-start mb-3"><h3 className="text-lg font-bold text-gray-900">{post.title}</h3>{post.user_id === user.id && (<button onClick={() => handleDeletePost(post.id)} className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-all"><Icons.Trash /></button>)}</div><p className="text-gray-600 text-sm whitespace-pre-wrap mb-5 leading-relaxed">{post.content}</p>
-            {post.image_url && (
-              <div className="mb-4 rounded-xl overflow-hidden shadow-sm border border-gray-100">
-                <img src={post.image_url} alt="첨부 이미지" className="w-full object-cover max-h-80" />
-              </div>
-            )}
-            <div className="flex items-center gap-3 pt-4 border-t border-gray-50">{renderAvatar(post.author_class, "w-8 h-8")}<div><span className="block text-xs font-bold text-gray-700">{post.author_name}</span><span className="block text-[10px] text-gray-400">{post.author_class} · {post.created_at.split('T')[0]}</span></div></div></div>))}</div>
+            <div className="grid grid-cols-1 gap-4">{posts.length === 0 ? <div className="text-center text-gray-400 py-20 bg-white rounded-3xl border border-gray-100">아직 작성된 팁이 없습니다.</div> : null}{posts.map(post => (<div key={post.id} className="bg-white p-6 rounded-3xl border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all group"><div className="flex justify-between items-start mb-3"><h3 className="text-lg font-bold text-gray-900">{post.title}</h3>{post.user_id === user.id && (<button onClick={() => handleDeletePost(post.id)} className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-all"><Icons.Trash /></button>)}</div><p className="text-gray-600 text-sm whitespace-pre-wrap mb-5 leading-relaxed">{post.content}</p>{post.image_url && (<div className="mb-4 rounded-xl overflow-hidden shadow-sm border border-gray-100"><img src={post.image_url} alt="첨부 이미지" className="w-full object-cover max-h-80" /></div>)}<div className="flex items-center gap-3 pt-4 border-t border-gray-50">{renderAvatar(post.author_class, "w-8 h-8")}<div><span className="block text-xs font-bold text-gray-700">{post.author_name}</span><span className="block text-[10px] text-gray-400">{post.author_class} · {post.created_at.split('T')[0]}</span></div></div></div>))}</div>
           </div>
         )}
       </main>
@@ -293,7 +316,13 @@ export default function RaidScheduler() {
       )}
 
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-gray-900">일정 등록</h2><p className="text-indigo-500 mb-6 font-bold text-sm bg-indigo-50 inline-block px-3 py-1 rounded-full">{selectedDate}</p><div className="flex bg-gray-100 p-1 rounded-xl mb-4"><button onClick={() => setRaidType('abyss')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>어비스</button><button onClick={() => setRaidType('raid')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>레이드</button></div><div className="mb-6 text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">던전 선택</label><select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{DUNGEON_DATA[raidType].map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select></div><div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div><input className="w-full bg-gray-50 p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-lg" placeholder="레이드 이름" value={raidTitle} onChange={e => setRaidTitle(e.target.value)} autoFocus /><div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">등록</button></div></div></div>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative">
+            <h2 className="text-2xl font-bold mb-1 text-gray-900">일정 등록</h2>
+            <p className="text-indigo-500 mb-6 font-bold text-sm bg-indigo-50 inline-block px-3 py-1 rounded-full">{selectedDate}</p>
+            <div className="flex bg-gray-100 p-1 rounded-xl mb-4"><button onClick={() => setRaidType('abyss')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>어비스</button><button onClick={() => setRaidType('raid')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>레이드</button></div><div className="mb-6 text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">던전 선택</label><select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{DUNGEON_DATA[raidType].map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select></div><div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div><input className="w-full bg-gray-50 p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-lg" placeholder="레이드 이름" value={raidTitle} onChange={e => setRaidTitle(e.target.value)} autoFocus /><div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">등록</button></div>
+          </div>
+        </div>
       )}
 
       {isWriteModalOpen && (
@@ -301,35 +330,25 @@ export default function RaidScheduler() {
           <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative">
             <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2"><Icons.Board /> 팁 작성하기</h2>
             <input className="w-full bg-gray-50 p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold" placeholder="제목을 입력하세요" value={postTitle} onChange={e => setPostTitle(e.target.value)} autoFocus />
-            <textarea className="w-full bg-gray-50 p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-indigo-500 transition-all h-40 resize-none" placeholder="내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} />
-            
-            {/* 사진 첨부 버튼 */}
-            <div className="mb-6">
-              <input type="file" accept="image/*" id="file-upload" className="hidden" onChange={handleImageSelect} />
-              <label htmlFor="file-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-gray-100 rounded-2xl cursor-pointer hover:bg-gray-200 transition-all text-gray-600 font-bold border border-dashed border-gray-300">
-                <Icons.Camera /> {selectedImage ? '사진 변경하기' : '사진 추가하기'}
-              </label>
-              {/* 미리보기 */}
-              {previewUrl && (
-                <div className="mt-3 relative w-full h-40 rounded-xl overflow-hidden border border-gray-200">
-                  <img src={previewUrl} className="w-full h-full object-cover" alt="미리보기" />
-                  <button onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1 hover:bg-black/70"><Icons.Close /></button>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button>
-              <button onClick={handleWritePost} disabled={uploading} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all disabled:bg-gray-400">
-                {uploading ? '업로드 중...' : '작성완료'}
-              </button>
-            </div>
+            <textarea className="w-full bg-gray-50 p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-indigo-500 transition-all h-40 resize-none" placeholder="내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} />
+            <div className="mb-6"><input type="file" accept="image/*" id="file-upload" className="hidden" onChange={handleImageSelect} /><label htmlFor="file-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-gray-100 rounded-2xl cursor-pointer hover:bg-gray-200 transition-all text-gray-600 font-bold border border-dashed border-gray-300"><Icons.Camera /> {selectedImage ? '사진 변경하기' : '사진 추가하기'}</label>{previewUrl && (<div className="mt-3 relative w-full h-40 rounded-xl overflow-hidden border border-gray-200"><img src={previewUrl} className="w-full h-full object-cover" alt="미리보기" /><button onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1 hover:bg-black/70"><Icons.Close /></button></div>)}</div>
+            <div className="flex gap-3"><button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button><button onClick={handleWritePost} disabled={uploading} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all disabled:bg-gray-400">{uploading ? '업로드 중...' : '작성완료'}</button></div>
           </div>
         </div>
       )}
 
       {isDetailModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden"><div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-purple-600' : 'bg-red-600'}`}></div><div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-gray-300 hover:text-red-500 p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-gray-300 hover:text-black p-2 transition-all"><Icons.Close /></button></div><h2 className="text-2xl font-extrabold mb-6 pr-20 text-gray-900 leading-tight">{selectedRaid?.title}</h2><div className="bg-gray-50 p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-gray-100"><p className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider flex items-center justify-between"><span>참가자 현황</span><span className={`px-2 py-1 rounded-full text-xs ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>{participants.length} / {selectedRaid?.max_members || 4}명</span></p><div className="space-y-3">{participants.length === 0 ? <p className="text-gray-400 text-sm text-center py-4">참가자가 없습니다.</p> : null}{participants.map(p => (<div key={p.id} className="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-gray-100/50"><div className="flex items-center gap-4">{renderAvatar(p.game_class, "w-10 h-10")}<div className="flex flex-col"><span className="font-bold text-sm text-gray-900">{p.user_name}</span><span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide bg-indigo-50 px-2 py-0.5 rounded-md w-fit mt-0.5">{p.game_class}</span></div></div></div>))}</div></div><div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-red-50 text-red-500 rounded-2xl font-bold hover:bg-red-100 text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={participants.length >= (selectedRaid?.max_members || 4)} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'}`}>{participants.length >= (selectedRaid?.max_members || 4) ? '정원 마감' : '참가하기'}</button>)}</div></div></div>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden">
+            <div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-purple-600' : 'bg-red-600'}`}></div>
+            <div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-gray-300 hover:text-red-500 p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-gray-300 hover:text-black p-2 transition-all"><Icons.Close /></button></div>
+            <h2 className="text-2xl font-extrabold mb-6 pr-20 text-gray-900 leading-tight truncate">{selectedRaid?.title}</h2>
+            <div className="bg-gray-50 p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-gray-100"><p className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider flex items-center justify-between"><span>참가자 현황</span><span className={`px-2 py-1 rounded-full text-xs ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>{participants.length} / {selectedRaid?.max_members || 4}명</span></p><div className="space-y-3">{participants.length === 0 ? <p className="text-gray-400 text-sm text-center py-4">참가자가 없습니다.</p> : null}{participants.map(p => (<div key={p.id} className="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-gray-100/50"><div className="flex items-center gap-4">{renderAvatar(p.game_class, "w-10 h-10")}<div className="flex flex-col"><span className="font-bold text-sm text-gray-900">{p.user_name}</span><span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide bg-indigo-50 px-2 py-0.5 rounded-md w-fit mt-0.5">{p.game_class}</span></div></div></div>))}</div></div>
+            <div className="space-y-2">
+              {isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-red-50 text-red-500 rounded-2xl font-bold hover:bg-red-100 text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={participants.length >= (selectedRaid?.max_members || 4)} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'}`}>{participants.length >= (selectedRaid?.max_members || 4) ? '정원 마감' : '참가하기'}</button>)}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
