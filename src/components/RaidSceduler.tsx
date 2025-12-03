@@ -40,7 +40,7 @@ const Icons = {
   Close: () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>),
   Edit: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>),
   Logout: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>),
-  Plus: () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>),
+  Plus: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>),
   GoogleCal: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path><path d="M10 16h4"></path><path d="M12 14v4"></path></svg>),
   UserGroup: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>),
   Camera: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>)
@@ -59,8 +59,7 @@ export default function RaidScheduler() {
   const [newClass, setNewClass] = useState(GAME_CLASSES[0]);
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  // ★ 초기값을 오늘 날짜로 설정
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState('');
   const [raidTitle, setRaidTitle] = useState('');
   const [raidType, setRaidType] = useState<'abyss' | 'raid'>('abyss');
   const [selectedDungeon, setSelectedDungeon] = useState('');
@@ -90,17 +89,27 @@ export default function RaidScheduler() {
     if (isCreateModalOpen) setSelectedDungeon(DUNGEON_DATA[raidType][0]);
   }, [raidType, isCreateModalOpen]);
 
+  // ★ 모바일 뷰 전환 로직 수정 (딜레이 추가)
   useEffect(() => {
-    const handleResize = () => {
+    const changeView = () => {
       if (calendarRef.current) {
         const calendarApi = calendarRef.current.getApi();
-        if (window.innerWidth < 768) calendarApi.changeView('listWeek');
-        else calendarApi.changeView('dayGridMonth');
+        if (window.innerWidth < 768) {
+          calendarApi.changeView('listWeek');
+        } else {
+          calendarApi.changeView('dayGridMonth');
+        }
       }
     };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    // 0.1초 뒤에 실행해서 캘린더 로딩 대기
+    const timer = setTimeout(changeView, 100);
+    window.addEventListener('resize', changeView);
+    
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', changeView);
+    };
   }, [activeTab]);
 
   const initialize = async () => {
@@ -190,9 +199,8 @@ export default function RaidScheduler() {
 
   const handleDeletePost = async (postId: number) => { if (!confirm("삭제하시겠습니까?")) return; await supabase.from('posts').delete().eq('id', postId); fetchPosts(); };
   
-  // ★ 등록 버튼 클릭 시 호출 (FAB 용)
+  // ★ FAB 등에서 호출 (오늘 날짜 기본)
   const openCreateModal = () => {
-    // 오늘 날짜로 초기화하거나, 마지막 선택 날짜 유지
     if (!selectedDate) setSelectedDate(new Date().toISOString().split('T')[0]);
     setIsCreateModalOpen(true);
   };
@@ -323,6 +331,7 @@ export default function RaidScheduler() {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200">
           <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative">
             <h2 className="text-2xl font-bold mb-1 text-gray-900">일정 등록</h2>
+            
             {/* ★ 2. 날짜 선택 가능하도록 input으로 변경 */}
             <input 
               type="date" 
