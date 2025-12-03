@@ -201,6 +201,12 @@ export default function RaidScheduler() {
     fetchPosts(); 
   };
   
+  const openCreateModal = () => {
+    // 오늘 날짜로 초기화하거나, 이미 선택된 날짜 유지
+    if (!selectedDate) setSelectedDate(new Date().toISOString().split('T')[0]);
+    setIsCreateModalOpen(true);
+  };
+
   const handleCreate = async () => { 
     if (!selectedDungeon) return alert('던전을 선택해주세요!'); 
     const typeTag = raidType === 'abyss' ? '[어비스]' : '[레이드]';
