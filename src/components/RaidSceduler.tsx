@@ -25,18 +25,9 @@ const CLASS_IMAGES: { [key: string]: string } = {
   "도적": "/class-icons/rogue.png", "격투가": "/class-icons/fighter.png", "듀얼블레이드": "/class-icons/dualblade.png"
 };
 
-// ★ 1. 던전 데이터 정리
 const DUNGEON_DATA = {
-  abyss: [
-    "입문", "어려움", "매우 어려움",
-    // 지옥 1~10 자동 생성
-    ...Array.from({ length: 10 }, (_, i) => `지옥 ${i + 1}단계`)
-  ],
-  raid: [
-    "글라스기브넨 [입문]", "글라스기브넨 [어려움]", "글라스기브넨 [매우 어려움]",
-    "화이트서큐버스",
-    "타바르타스 [입문]", "타바르타스 [어려움]"
-  ]
+  abyss: ["입문", "어려움", "매우 어려움", ...Array.from({ length: 10 }, (_, i) => `지옥 ${i + 1}단계`)],
+  raid: ["글라스기브넨 [입문]", "글라스기브넨 [어려움]", "글라스기브넨 [매우 어려움]", "화이트서큐버스", "타바르타스 [입문]", "타바르타스 [어려움]"]
 };
 
 const Icons = {
@@ -60,22 +51,25 @@ export default function RaidScheduler() {
   const [raids, setRaids] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'calendar' | 'stats' | 'board'>('calendar');
   
+  // 모달 및 입력 상태
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [newNickname, setNewNickname] = useState('');
   const [newClass, setNewClass] = useState(GAME_CLASSES[0]);
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
-  
-  // ★ 2. 등록 모달용 상태 추가 (타입, 선택값)
-  const [raidType, setRaidType] = useState<'abyss' | 'raid'>('abyss'); // 어비스 or 레이드
-  const [selectedDungeon, setSelectedDungeon] = useState(''); // 선택된 던전 이름
-  const [maxMembers, setMaxMembers] = useState(4); 
+  const [raidTitle, setRaidTitle] = useState('');
+  const [raidType, setRaidType] = useState<'abyss' | 'raid'>('abyss');
+  const [selectedDungeon, setSelectedDungeon] = useState('');
+  const [maxMembers, setMaxMembers] = useState(4);
 
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedRaid, setSelectedRaid] = useState<any>(null);
   const [participants, setParticipants] = useState<any[]>([]);
+  
   const [statsData, setStatsData] = useState<any[]>([]);
+  const [statsFilter, setStatsFilter] = useState<'all' | 'abyss' | 'raid'>('all'); // ★ 통계 필터 상태
+
   const [posts, setPosts] = useState<any[]>([]);
   const [isWriteModalOpen, setIsWriteModalOpen] = useState(false);
   const [postTitle, setPostTitle] = useState('');
@@ -85,14 +79,10 @@ export default function RaidScheduler() {
   useEffect(() => {
     if (activeTab === 'stats') fetchStats();
     if (activeTab === 'board') fetchPosts();
-  }, [activeTab]);
+  }, [activeTab, statsFilter]); // 필터가 바뀌면 다시 계산
 
-  // ★ 등록 모달이 열릴 때 기본값 세팅
   useEffect(() => {
-    if (isCreateModalOpen) {
-      // 탭이 바뀌면 첫 번째 옵션을 기본값으로 선택
-      setSelectedDungeon(DUNGEON_DATA[raidType][0]);
-    }
+    if (isCreateModalOpen) setSelectedDungeon(DUNGEON_DATA[raidType][0]);
   }, [raidType, isCreateModalOpen]);
 
   const initialize = async () => {
@@ -122,47 +112,61 @@ export default function RaidScheduler() {
         date: raid.start_time.split('T')[0], 
         created_by_email: raid.created_by_email, 
         max_members: raid.max_members,
-        // ★ 레이드 종류에 따라 색상 다르게 (어비스: 보라 / 레이드: 빨강)
         backgroundColor: raid.title.includes('어비스') || raid.title.includes('지옥') ? '#7C3AED' : '#DC2626', 
         borderColor: 'transparent' 
       }))); 
     } 
   };
   
-  const fetchStats = async () => { const { data: participants } = await supabase.from('participants').select('user_name, game_class'); if (participants) { const countMap: { [key: string]: { count: number; job: string } } = {}; participants.forEach((p) => { if (countMap[p.user_name]) countMap[p.user_name].count += 1; else countMap[p.user_name] = { count: 1, job: p.game_class || '모험가' }; }); const chartData = Object.keys(countMap).map((name) => ({ name: name, count: countMap[name].count, job: countMap[name].job })).sort((a, b) => b.count - a.count); setStatsData(chartData); } };
+  // ★ 통계 데이터 가져오기 및 필터링 로직 강화
+  const fetchStats = async () => {
+    // 참가자 정보와 함께, 그 참가자가 어떤 레이드(raid_id)에 참가했는지, 그 레이드의 제목(title)은 무엇인지 가져옵니다.
+    const { data: participants } = await supabase
+      .from('participants')
+      .select('user_name, game_class, raids (title)'); // 관계형 데이터 가져오기
+
+    if (participants) {
+      const countMap: { [key: string]: { count: number; job: string } } = {};
+      
+      participants.forEach((p: any) => {
+        const raidTitle = p.raids?.title || "";
+        
+        // 필터링: 선택된 필터에 맞지 않으면 건너뜀
+        if (statsFilter === 'abyss' && !raidTitle.includes('어비스') && !raidTitle.includes('지옥')) return;
+        if (statsFilter === 'raid' && !raidTitle.includes('레이드')) return;
+
+        if (countMap[p.user_name]) {
+          countMap[p.user_name].count += 1;
+        } else {
+          countMap[p.user_name] = { count: 1, job: p.game_class || '모험가' };
+        }
+      });
+
+      const chartData = Object.keys(countMap)
+        .map((name) => ({ name: name, count: countMap[name].count, job: countMap[name].job }))
+        .sort((a, b) => b.count - a.count);
+        
+      setStatsData(chartData);
+    }
+  };
+
   const fetchPosts = async () => { const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false }); if (data) setPosts(data); };
   const handleWritePost = async () => { if (!postTitle || !postContent) return alert("내용을 입력해주세요."); await supabase.from('posts').insert([{ title: postTitle, content: postContent, author_name: myProfile.nickname, author_class: myProfile.game_class, user_id: user.id }]); setPostTitle(''); setPostContent(''); setIsWriteModalOpen(false); fetchPosts(); };
   const handleDeletePost = async (postId: number) => { if (!confirm("삭제하시겠습니까?")) return; await supabase.from('posts').delete().eq('id', postId); fetchPosts(); };
   
-  // ★ 등록 함수 수정 (드롭박스 값 사용)
   const handleCreate = async () => { 
     if (!selectedDungeon) return alert('던전을 선택해주세요!'); 
-    
-    // 제목 앞에 [어비스] 또는 [레이드] 태그 붙이기 (나중에 색상 구분용)
     const typeTag = raidType === 'abyss' ? '[어비스]' : '[레이드]';
     const finalTitle = `${typeTag} ${selectedDungeon}`;
-
-    await supabase.from('raids').insert([{ 
-      title: finalTitle, 
-      start_time: selectedDate, 
-      created_by_email: user.email,
-      max_members: maxMembers 
-    }]); 
-    
-    setMaxMembers(4); 
-    setIsCreateModalOpen(false); 
-    fetchRaids(); 
+    await supabase.from('raids').insert([{ title: finalTitle, start_time: selectedDate, created_by_email: user.email, max_members: maxMembers }]); 
+    setRaidTitle(''); setMaxMembers(4); setIsCreateModalOpen(false); fetchRaids(); 
   };
   
   const handleEventClick = async (arg: any) => { 
-    const raidId = arg.event.id; 
-    const title = arg.event.title; 
-    const createdBy = arg.event.extendedProps.created_by_email; 
-    const max = arg.event.extendedProps.max_members || 4; 
+    const raidId = arg.event.id; const title = arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; 
     const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); 
     setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max }); 
-    setParticipants(data || []); 
-    setIsDetailModalOpen(true); 
+    setParticipants(data || []); setIsDetailModalOpen(true); 
   };
   
   const handleJoin = async () => { 
@@ -223,8 +227,47 @@ export default function RaidScheduler() {
           <div className="bg-white p-4 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-full flex flex-col"><FullCalendar plugins={[dayGridPlugin, interactionPlugin]} initialView="dayGridMonth" events={raids} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} /></div>
         ) : activeTab === 'stats' ? (
           <div className="space-y-6">
-            <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-[450px]"><h3 className="text-lg font-bold mb-4 text-gray-800 flex items-center gap-2"><Icons.Chart /> 참여 랭킹 TOP</h3><ResponsiveContainer width="100%" height="90%"><BarChart data={statsData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" /><XAxis type="number" hide /><YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 14, fontWeight: 'bold', fill: '#374151' }} /><Tooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }} /><Bar dataKey="count" barSize={30} radius={[0, 10, 10, 0]}>{statsData.map((entry, index) => (<Cell key={`cell-${index}`} fill={index < 3 ? ['#FFD700', '#C0C0C0', '#CD7F32'][index] : '#818cf8'} />))}</Bar></BarChart></ResponsiveContainer></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{statsData.map((user, index) => (<div key={user.name} className="bg-white p-5 rounded-2xl flex items-center justify-between shadow-sm border border-gray-100"><div className="flex items-center gap-4"><span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${index < 3 ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>{index + 1}</span><div><div className="font-bold text-gray-900">{user.name}</div><div className="text-xs text-gray-500 font-medium">{user.job}</div></div></div><div className="text-indigo-600 font-extrabold text-lg">{user.count}회</div></div>))}</div>
+            <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-[500px]">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icons.Chart /> 참여 랭킹</h3>
+                {/* ★ 통계 필터 버튼 */}
+                <div className="flex bg-gray-100 p-1 rounded-xl">
+                  <button onClick={() => setStatsFilter('all')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'all' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>전체</button>
+                  <button onClick={() => setStatsFilter('abyss')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'abyss' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>어비스</button>
+                  <button onClick={() => setStatsFilter('raid')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'raid' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>레이드</button>
+                </div>
+              </div>
+              
+              <ResponsiveContainer width="100%" height="90%">
+                <BarChart data={statsData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 14, fontWeight: 'bold', fill: '#374151' }} />
+                  <Tooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }} />
+                  <Bar dataKey="count" barSize={30} radius={[0, 10, 10, 0]}>
+                    {/* ★ 내 이름(myProfile.nickname)이면 색상 다르게 (Indigo vs Gray) */}
+                    {statsData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.name === myProfile?.nickname ? '#4F46E5' : '#D1D5DB'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {statsData.map((user, index) => (
+                <div key={user.name} className={`bg-white p-5 rounded-2xl flex items-center justify-between shadow-sm border ${user.name === myProfile?.nickname ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50' : 'border-gray-100'}`}>
+                  <div className="flex items-center gap-4">
+                    <span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${index < 3 ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>{index + 1}</span>
+                    <div>
+                      <div className="font-bold text-gray-900">{user.name}</div>
+                      <div className="text-xs text-gray-500 font-medium">{user.job}</div>
+                    </div>
+                  </div>
+                  <div className={`font-extrabold text-lg ${user.name === myProfile?.nickname ? 'text-indigo-600' : 'text-gray-400'}`}>{user.count}회</div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="relative min-h-full pb-20">
@@ -236,57 +279,21 @@ export default function RaidScheduler() {
 
       <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 flex justify-around items-center py-2 z-40 pb-safe"><button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'calendar' ? 'text-indigo-600' : 'text-gray-400'}`}><Icons.Calendar /><span className="text-[10px] font-bold">일정</span></button><button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'stats' ? 'text-indigo-600' : 'text-gray-400'}`}><Icons.Chart /><span className="text-[10px] font-bold">통계</span></button><button onClick={() => setActiveTab('board')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'board' ? 'text-indigo-600' : 'text-gray-400'}`}><Icons.Board /><span className="text-[10px] font-bold">팁</span></button></nav>
 
+      {/* --- 모달들 (기존과 동일) --- */}
       {isProfileModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-gray-900">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-gray-500 mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">닉네임</label><input className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">직업</label><select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="bg-indigo-50 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-indigo-100"><span className="text-xs font-bold text-indigo-400">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">저장</button></div></div></div>
       )}
 
-      {/* ★ 3. 등록 모달 수정 (어비스/레이드 선택 + 드롭박스) */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200">
           <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative">
             <h2 className="text-2xl font-bold mb-1 text-gray-900">일정 등록</h2>
             <p className="text-indigo-500 mb-6 font-bold text-sm bg-indigo-50 inline-block px-3 py-1 rounded-full">{selectedDate}</p>
-            
-            {/* 어비스 vs 레이드 라디오 버튼 */}
-            <div className="flex bg-gray-100 p-1 rounded-xl mb-4">
-              <button 
-                onClick={() => setRaidType('abyss')}
-                className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}
-              >
-                어비스
-              </button>
-              <button 
-                onClick={() => setRaidType('raid')}
-                className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}
-              >
-                레이드
-              </button>
-            </div>
-
-            {/* 던전 선택 드롭박스 */}
-            <div className="mb-6 text-left">
-              <label className="block text-xs font-bold text-gray-400 mb-2 ml-1">던전 선택</label>
-              <select 
-                className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none text-lg"
-                value={selectedDungeon}
-                onChange={(e) => setSelectedDungeon(e.target.value)}
-              >
-                {DUNGEON_DATA[raidType].map(dungeon => (
-                  <option key={dungeon} value={dungeon}>{dungeon}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* 4인/8인 선택 */}
-            <div className="flex gap-3 mb-8">
-              <button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button>
-              <button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button>
-            </div>
-
-            <div className="flex gap-3">
-              <button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button>
-              <button onClick={handleCreate} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">등록</button>
-            </div>
+            <div className="flex bg-gray-100 p-1 rounded-xl mb-4"><button onClick={() => setRaidType('abyss')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>어비스</button><button onClick={() => setRaidType('raid')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>레이드</button></div>
+            <div className="mb-6 text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">던전 선택</label><select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{DUNGEON_DATA[raidType].map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select></div>
+            <div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div>
+            <input className="w-full bg-gray-50 p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-lg" placeholder="레이드 이름" value={raidTitle} onChange={e => setRaidTitle(e.target.value)} autoFocus />
+            <div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">등록</button></div>
           </div>
         </div>
       )}
@@ -298,9 +305,7 @@ export default function RaidScheduler() {
       {isDetailModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200">
           <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden">
-            {/* ★ 레이드 종류에 따라 상단 바 색상 다르게 (어비스: 보라 / 레이드: 빨강) */}
             <div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-purple-600' : 'bg-red-600'}`}></div>
-            
             <div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-gray-300 hover:text-red-500 p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-gray-300 hover:text-black p-2 transition-all"><Icons.Close /></button></div>
             <h2 className="text-2xl font-extrabold mb-6 pr-20 text-gray-900 leading-tight">{selectedRaid?.title}</h2>
             <div className="bg-gray-50 p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-gray-100">
