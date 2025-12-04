@@ -40,13 +40,19 @@ const Icons = {
   Close: () => (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>),
   Edit: () => (<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>),
   Logout: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>),
-  Plus: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>),
+  Plus: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>),
   GoogleCal: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path><path d="M10 16h4"></path><path d="M12 14v4"></path></svg>),
   UserGroup: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>),
   Camera: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>),
   Admin: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>),
   Mic: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>),
-  Crown: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="#F59E0B" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"></path></svg>)
+  Crown: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="#F59E0B" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"></path></svg>),
+  // ★ 파일(클립) 아이콘
+  Clip: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>),
+  // ★ 파일 다운로드 아이콘
+  Download: () => (<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>),
+  // ★ 문서 아이콘
+  File: () => (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>)
 };
 
 export default function RaidScheduler() {
@@ -77,8 +83,12 @@ export default function RaidScheduler() {
   const [postTitle, setPostTitle] = useState('');
   const [postContent, setPostContent] = useState('');
   const [uploading, setUploading] = useState(false);
+  
+  // ★ 이미지, 파일 업로드 상태 분리
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
   const [allProfiles, setAllProfiles] = useState<any[]>([]);
   const [voiceRoomName, setVoiceRoomName] = useState('guild-lobby');
 
@@ -131,107 +141,81 @@ export default function RaidScheduler() {
   const handleSaveProfile = async () => { if (!newNickname) return alert("입력해주세요!"); const newProfile = { id: user.id, nickname: newNickname, game_class: newClass }; const { error } = await supabase.from('profiles').upsert([newProfile]); if (!error) { setMyProfile(newProfile); setIsProfileModalOpen(false); } };
   const openEditProfile = () => { if (myProfile) { setNewNickname(myProfile.nickname); setNewClass(myProfile.game_class); } setIsProfileModalOpen(true); };
   
-  const fetchRaids = async () => { 
-    const { data } = await supabase.from('raids').select('*'); 
-    if (data) { 
-      setRaids(data.map((raid) => ({ 
-        id: raid.id, 
-        title: raid.title, 
-        date: raid.start_time.split('T')[0], 
-        created_by_email: raid.created_by_email,
-        host_name: raid.host_name, 
-        host_avatar: raid.host_avatar,
-        max_members: raid.max_members,
-        backgroundColor: raid.title.includes('어비스') || raid.title.includes('지옥') ? '#7C3AED' : '#DC2626', 
-        borderColor: 'transparent' 
-      }))); 
-    } 
-  };
-  
+  const fetchRaids = async () => { const { data } = await supabase.from('raids').select('*'); if (data) { setRaids(data.map((raid) => ({ id: raid.id, title: raid.title, date: raid.start_time.split('T')[0], created_by_email: raid.created_by_email, host_name: raid.host_name, host_avatar: raid.host_avatar, max_members: raid.max_members, backgroundColor: raid.title.includes('어비스') || raid.title.includes('지옥') ? '#7C3AED' : '#DC2626', borderColor: 'transparent' }))); } };
   const fetchStats = async () => { const { data: participants } = await supabase.from('participants').select('user_name, game_class, raids (title)'); if (participants) { const countMap: { [key: string]: { count: number; job: string } } = {}; participants.forEach((p: any) => { const raidTitle = p.raids?.title || ""; if (statsFilter === 'abyss' && !raidTitle.includes('어비스') && !raidTitle.includes('지옥')) return; if (statsFilter === 'raid' && !raidTitle.includes('레이드')) return; if (countMap[p.user_name]) countMap[p.user_name].count += 1; else countMap[p.user_name] = { count: 1, job: p.game_class || '모험가' }; }); const chartData = Object.keys(countMap).map((name) => ({ name: name, count: countMap[name].count, job: countMap[name].job })).sort((a, b) => b.count - a.count); setStatsData(chartData); } };
   const fetchPosts = async () => { const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false }); if (data) setPosts(data); };
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; setSelectedImage(file); setPreviewUrl(URL.createObjectURL(file)); } };
-  const handleWritePost = async () => { if (!postTitle || !postContent) return alert("입력해주세요."); setUploading(true); let imageUrl = null; try { if (selectedImage) { const fileExt = selectedImage.name.split('.').pop(); const fileName = `${Date.now()}.${fileExt}`; const { error: uploadError } = await supabase.storage.from('images').upload(fileName, selectedImage); if (uploadError) throw uploadError; const { data } = supabase.storage.from('images').getPublicUrl(fileName); imageUrl = data.publicUrl; } await supabase.from('posts').insert([{ title: postTitle, content: postContent, author_name: myProfile.nickname, author_class: myProfile.game_class, user_id: user.id, image_url: imageUrl }]); setPostTitle(''); setPostContent(''); setSelectedImage(null); setPreviewUrl(''); setIsWriteModalOpen(false); fetchPosts(); } catch (error) { console.error(error); alert("오류 발생"); } finally { setUploading(false); } };
-  const handleDeletePost = async (postId: number) => { if (!confirm("삭제하시겠습니까?")) return; await supabase.from('posts').delete().eq('id', postId); fetchPosts(); };
   
-  // ★ FAB 등에서 호출 (오늘 날짜 기본)
-  const openCreateModal = () => {
-    if (!selectedDate) setSelectedDate(new Date().toISOString().split('T')[0]);
-    setIsCreateModalOpen(true);
+  // 이미지 선택
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedImage(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    }
   };
 
-  // ★ 등록 함수 수정 (자동 참가 추가)
-  const handleCreate = async () => { 
-    if (!selectedDungeon) return alert('던전을 선택해주세요!'); 
-    const typeTag = raidType === 'abyss' ? '[어비스]' : '[레이드]';
-    const finalTitle = `${typeTag} ${selectedDungeon}`;
-    
-    // 1. 레이드 생성
-    const { data: newRaid, error } = await supabase.from('raids').insert([{ 
-      title: finalTitle, 
-      start_time: selectedDate, 
-      created_by_email: user.email, 
-      max_members: maxMembers,
-      host_name: myProfile?.nickname || '알수없음', 
-      host_avatar: myProfile?.game_class || '모험가' 
-    }]).select().single(); // 생성된 ID를 받기 위해 select().single() 사용
-
-    if (error) {
-      console.error(error);
-      return alert('생성 실패');
+  // ★ 파일 선택 (이미지와 별도)
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
     }
+  };
 
-    // 2. 공대장(나) 자동 참가
-    if (newRaid) {
-      await supabase.from('participants').insert([{
-        raid_id: newRaid.id,
-        user_name: myProfile.nickname,
-        game_class: myProfile.game_class,
-        user_avatar: user.user_metadata.avatar_url,
-        user_email: user.email
+  // ★ 글쓰기 (이미지 + 파일 업로드)
+  const handleWritePost = async () => {
+    if (!postTitle || !postContent) return alert("제목과 내용을 입력해주세요.");
+    setUploading(true); 
+    let imageUrl = null;
+    let fileUrl = null;
+    let fileNameStr = null;
+
+    try {
+      // 1. 이미지 업로드
+      if (selectedImage) {
+        const fileExt = selectedImage.name.split('.').pop();
+        const imgName = `img_${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('images').upload(imgName, selectedImage);
+        if (uploadError) throw uploadError;
+        const { data } = supabase.storage.from('images').getPublicUrl(imgName);
+        imageUrl = data.publicUrl;
+      }
+
+      // 2. 파일 업로드 (files 버킷)
+      if (selectedFile) {
+        const fileExt = selectedFile.name.split('.').pop();
+        const fName = `file_${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('files').upload(fName, selectedFile);
+        if (uploadError) throw uploadError;
+        const { data } = supabase.storage.from('files').getPublicUrl(fName);
+        fileUrl = data.publicUrl;
+        fileNameStr = selectedFile.name;
+      }
+
+      // 3. DB 저장
+      await supabase.from('posts').insert([{ 
+        title: postTitle, 
+        content: postContent, 
+        author_name: myProfile.nickname, 
+        author_class: myProfile.game_class, 
+        user_id: user.id, 
+        image_url: imageUrl,
+        file_url: fileUrl, // 추가됨
+        file_name: fileNameStr // 추가됨
       }]);
-    }
-    
-    setRaidTitle(''); setMaxMembers(4); setIsCreateModalOpen(false); fetchRaids(); 
-  };
-  
-  const handleEventClick = async (arg: any) => { 
-    const raidId = arg.event.id; const title = arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; 
-    const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar;
-    const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); 
-    setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar }); 
-    setParticipants(data || []); setIsDetailModalOpen(true); 
-  };
-  
-  const handleJoin = async () => { 
-    if (!myProfile) return alert('프로필 필요'); 
-    const limit = selectedRaid.max_members || 4;
-    if (participants.length >= limit) return alert(`🚫 정원이 꽉 찼습니다! (최대 ${limit}명)`);
-    await supabase.from('participants').insert([{ raid_id: selectedRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); 
-    refreshParticipants(selectedRaid.id); 
-  };
-  
-  // ★ 취소 함수 수정 (공대장 혼자 남았을 때 자동 삭제)
-  const handleLeave = async () => { 
-    // 1. 공대장인지 확인 (현재 선택된 레이드의 생성자 == 나)
-    const isHost = selectedRaid.created_by_email === user.email;
-    
-    // 2. 혼자 남았는지 확인 (참가자 수 <= 1)
-    if (isHost && participants.length <= 1) {
-      if (!confirm("공대장이 나가면 파티가 해체(삭제)됩니다. 정말 삭제하시겠습니까?")) return;
-      
-      // 레이드 자체를 삭제
-      await supabase.from('raids').delete().eq('id', selectedRaid.id);
-      setIsDetailModalOpen(false);
-      fetchRaids(); // 달력 갱신
-    } else {
-      // 일반적인 참가 취소
-      if (!confirm("취소하시겠습니까?")) return;
-      await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email);
-      refreshParticipants(selectedRaid.id); 
-    }
+
+      setPostTitle(''); setPostContent(''); 
+      setSelectedImage(null); setPreviewUrl(''); setSelectedFile(null);
+      setIsWriteModalOpen(false); 
+      fetchPosts();
+    } catch (error) { console.error(error); alert("업로드 오류 발생"); } finally { setUploading(false); }
   };
 
+  const handleDeletePost = async (postId: number) => { if (!confirm("삭제하시겠습니까?")) return; await supabase.from('posts').delete().eq('id', postId); fetchPosts(); };
+  const openCreateModal = () => { if (!selectedDate) setSelectedDate(new Date().toISOString().split('T')[0]); setIsCreateModalOpen(true); };
+  const handleCreate = async () => { if (!selectedDungeon) return alert('던전 선택!'); const typeTag = raidType === 'abyss' ? '[어비스]' : '[레이드]'; const finalTitle = `${typeTag} ${selectedDungeon}`; await supabase.from('raids').insert([{ title: finalTitle, start_time: selectedDate, created_by_email: user.email, max_members: maxMembers, host_name: myProfile?.nickname || '알수없음', host_avatar: myProfile?.game_class || '모험가' }]); setRaidTitle(''); setMaxMembers(4); setIsCreateModalOpen(false); fetchRaids(); };
+  const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar }); setParticipants(data || []); setIsDetailModalOpen(true); };
+  const handleJoin = async () => { if (!myProfile) return alert('프로필 필요'); const limit = selectedRaid.max_members || 4; if (participants.length >= limit) return alert(`🚫 정원이 꽉 찼습니다! (최대 ${limit}명)`); await supabase.from('participants').insert([{ raid_id: selectedRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); refreshParticipants(selectedRaid.id); };
+  const handleLeave = async () => { const isHost = selectedRaid.created_by_email === user.email; if (isHost && participants.length <= 1) { if (!confirm("파티가 해체됩니다. 삭제하시겠습니까?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); } else { if (!confirm("취소?")) return; await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email); refreshParticipants(selectedRaid.id); } };
   const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
   const refreshParticipants = async (raidId: any) => { const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setParticipants(data || []); };
   const renderAvatar = (gameClass: string, size = "w-10 h-10") => { let imagePath = CLASS_IMAGES[gameClass] || "/class-icons/default.png"; return <img src={imagePath} className={`${size} rounded-full object-cover border border-gray-200 bg-white`} alt={gameClass} onError={(e) => { (e.target as HTMLImageElement).src = "/class-icons/default.png"; }} />; };
@@ -258,13 +242,7 @@ export default function RaidScheduler() {
           </div>
           <span className="font-extrabold text-lg md:text-xl tracking-tight text-gray-900">던컨의 장난감가게</span>
         </div>
-        <nav className="hidden md:flex items-center gap-2 bg-gray-50 p-1.5 rounded-full border border-gray-100">
-          <TabButton tabName="calendar" label="일정" icon={<Icons.Calendar />} />
-          <TabButton tabName="stats" label="통계" icon={<Icons.Chart />} />
-          <TabButton tabName="board" label="팁" icon={<Icons.Board />} />
-          {/* <TabButton tabName="voice" label="보이스" icon={<Icons.Mic />} /> */}
-          {isAdmin && <TabButton tabName="admin" label="관리" icon={<Icons.Admin />} />}
-        </nav>
+        <nav className="hidden md:flex items-center gap-2 bg-gray-50 p-1.5 rounded-full border border-gray-100"><TabButton tabName="calendar" label="일정" icon={<Icons.Calendar />} /><TabButton tabName="stats" label="통계" icon={<Icons.Chart />} /><TabButton tabName="board" label="팁" icon={<Icons.Board />} />{/* <TabButton tabName="voice" label="보이스" icon={<Icons.Mic />} /> */}{isAdmin && <TabButton tabName="admin" label="관리" icon={<Icons.Admin />} />}</nav>
         <div className="flex items-center gap-2 md:gap-4">
           <div className="flex flex-col items-end cursor-pointer group" onClick={openEditProfile}>
             <div className="text-sm font-bold text-gray-800 flex items-center gap-1"><span className="hidden md:inline">{myProfile ? myProfile.nickname : '설정필요'}</span><span className="md:hidden">{myProfile ? myProfile.nickname.slice(0,4)+'..' : '설정'}</span></div>
@@ -283,85 +261,93 @@ export default function RaidScheduler() {
           </div>
         ) : activeTab === 'stats' ? (
           <div className="space-y-6">
-            <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-[500px]">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icons.Chart /> 참여 랭킹</h3>
-                <div className="flex bg-gray-100 p-1 rounded-xl">
-                  <button onClick={() => setStatsFilter('all')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'all' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>전체</button>
-                  <button onClick={() => setStatsFilter('abyss')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'abyss' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>어비스</button>
-                  <button onClick={() => setStatsFilter('raid')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'raid' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>레이드</button>
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height="90%"><BarChart data={statsData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" /><XAxis type="number" hide /><YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 14, fontWeight: 'bold', fill: '#374151' }} /><Tooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }} /><Bar dataKey="count" barSize={30} radius={[0, 10, 10, 0]}>{statsData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.name === myProfile?.nickname ? '#4F46E5' : '#D1D5DB'} />))}</Bar></BarChart></ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{statsData.map((user, index) => (<div key={user.name} className={`bg-white p-5 rounded-2xl flex items-center justify-between shadow-sm border ${user.name === myProfile?.nickname ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50' : 'border-gray-100'}`}><div className="flex items-center gap-4"><span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${index < 3 ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>{index + 1}</span><div><div className="font-bold text-gray-900">{user.name}</div><div className="text-xs text-gray-500 font-medium">{user.job}</div></div></div><div className={`font-extrabold text-lg ${user.name === myProfile?.nickname ? 'text-indigo-600' : 'text-gray-400'}`}>{user.count}회</div></div>))}</div>
+            <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-[500px]"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icons.Chart /> 참여 랭킹</h3><div className="flex bg-gray-100 p-1 rounded-xl"><button onClick={() => setStatsFilter('all')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'all' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>전체</button><button onClick={() => setStatsFilter('abyss')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'abyss' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>어비스</button><button onClick={() => setStatsFilter('raid')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'raid' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>레이드</button></div></div><ResponsiveContainer width="100%" height="90%"><BarChart data={statsData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" /><XAxis type="number" hide /><YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 14, fontWeight: 'bold', fill: '#374151' }} /><Tooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }} /><Bar dataKey="count" barSize={30} radius={[0, 10, 10, 0]}>{statsData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.name === myProfile?.nickname ? '#4F46E5' : '#D1D5DB'} />))}</Bar></BarChart></ResponsiveContainer></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{statsData.map((user, index) => (<div key={user.name} className={`bg-white p-5 rounded-2xl flex items-center justify-between shadow-sm border ${user.name === myProfile?.nickname ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50' : 'border-gray-100'}`}><div className="flex items-center gap-4"><span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${index < 3 ? 'bg-black text-white' : 'bg-gray-100 text-gray-500'}`}>{index + 1}</span><div><div className="font-bold text-gray-900">{user.name}</div><div className="text-xs text-gray-500 font-medium">{user.job}</div></div></div><div className={`font-extrabold text-lg ${user.name === myProfile?.nickname ? 'text-indigo-600' : 'text-gray-400'}`}>{user.count}회</div></div>))}</div>
           </div>
         ) : activeTab === 'board' ? (
           <div className="relative min-h-full pb-20">
             <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-gray-800">💡 꿀팁 공유 게시판</h3><button onClick={() => setIsWriteModalOpen(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-95"><Icons.Plus /> <span className="hidden md:inline">팁 작성하기</span><span className="md:hidden">글쓰기</span></button></div>
-            <div className="grid grid-cols-1 gap-4">{posts.length === 0 ? <div className="text-center text-gray-400 py-20 bg-white rounded-3xl border border-gray-100">아직 작성된 팁이 없습니다.</div> : null}{posts.map(post => (<div key={post.id} className="bg-white p-6 rounded-3xl border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all group"><div className="flex justify-between items-start mb-3"><h3 className="text-lg font-bold text-gray-900">{post.title}</h3>{(isAdmin || post.user_id === user.id) && (<button onClick={() => handleDeletePost(post.id)} className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-all"><Icons.Trash /></button>)}</div><p className="text-gray-600 text-sm whitespace-pre-wrap mb-5 leading-relaxed">{post.content}</p>{post.image_url && (<div className="mb-4 rounded-xl overflow-hidden shadow-sm border border-gray-100"><img src={post.image_url} alt="첨부 이미지" className="w-full object-cover max-h-80" /></div>)}<div className="flex items-center gap-3 pt-4 border-t border-gray-50">{renderAvatar(post.author_class, "w-8 h-8")}<div><span className="block text-xs font-bold text-gray-700">{post.author_name}</span><span className="block text-[10px] text-gray-400">{post.author_class} · {post.created_at.split('T')[0]}</span></div></div></div>))}</div>
+            <div className="grid grid-cols-1 gap-4">{posts.length === 0 ? <div className="text-center text-gray-400 py-20 bg-white rounded-3xl border border-gray-100">아직 작성된 팁이 없습니다.</div> : null}{posts.map(post => (<div key={post.id} className="bg-white p-6 rounded-3xl border border-gray-100 hover:border-indigo-200 hover:shadow-md transition-all group"><div className="flex justify-between items-start mb-3"><h3 className="text-lg font-bold text-gray-900">{post.title}</h3>{(isAdmin || post.user_id === user.id) && (<button onClick={() => handleDeletePost(post.id)} className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition-all"><Icons.Trash /></button>)}</div><p className="text-gray-600 text-sm whitespace-pre-wrap mb-5 leading-relaxed">{post.content}</p>
+            {post.image_url && (<div className="mb-4 rounded-xl overflow-hidden shadow-sm border border-gray-100"><img src={post.image_url} alt="첨부 이미지" className="w-full object-cover max-h-80" /></div>)}
+            
+            {/* ★ 첨부파일 표시 (다운로드 버튼) */}
+            {post.file_url && (
+              <a href={post.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 mb-4 bg-gray-50 rounded-xl border border-gray-200 hover:bg-indigo-50 hover:border-indigo-200 transition-colors group/file">
+                <div className="bg-white p-2 rounded-lg text-indigo-500 shadow-sm"><Icons.File /></div>
+                <div className="flex-1 overflow-hidden">
+                  <div className="text-sm font-bold text-gray-700 truncate group-hover/file:text-indigo-700">{post.file_name || '첨부파일'}</div>
+                  <div className="text-xs text-gray-400">클릭하여 다운로드</div>
+                </div>
+                <div className="text-gray-400 group-hover/file:text-indigo-500"><Icons.Download /></div>
+              </a>
+            )}
+
+            <div className="flex items-center gap-3 pt-4 border-t border-gray-50">{renderAvatar(post.author_class, "w-8 h-8")}<div><span className="block text-xs font-bold text-gray-700">{post.author_name}</span><span className="block text-[10px] text-gray-400">{post.author_class} · {post.created_at.split('T')[0]}</span></div></div></div>))}</div>
           </div>
         ) : (
-          <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-full">
-            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2"><Icons.Admin /> 회원 관리</h3>
-            <div className="space-y-4">{allProfiles.map(member => (<div key={member.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100"><div className="flex items-center gap-4">{renderAvatar(member.game_class, "w-10 h-10")}<div><div className="font-bold text-gray-900 flex items-center gap-2">{member.nickname} {member.role === 'admin' && <span className="bg-black text-white text-[10px] px-2 py-0.5 rounded-full">ADMIN</span>}</div><div className="text-xs text-gray-500">{member.game_class}</div></div></div>{member.id !== user.id && member.role !== 'admin' && (<button onClick={() => handleDeleteMember(member.id, member.nickname)} className="px-4 py-2 bg-red-100 text-red-600 rounded-xl text-xs font-bold hover:bg-red-200 transition-all">강퇴</button>)}</div>))}</div>
-          </div>
+          // ... 관리자 탭 (기존과 동일)
+          <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-full"><h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2"><Icons.Admin /> 회원 관리</h3><div className="space-y-4">{allProfiles.map(member => (<div key={member.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100"><div className="flex items-center gap-4">{renderAvatar(member.game_class, "w-10 h-10")}<div><div className="font-bold text-gray-900 flex items-center gap-2">{member.nickname} {member.role === 'admin' && <span className="bg-black text-white text-[10px] px-2 py-0.5 rounded-full">ADMIN</span>}</div><div className="text-xs text-gray-500">{member.game_class}</div></div></div>{member.id !== user.id && member.role !== 'admin' && (<button onClick={() => handleDeleteMember(member.id, member.nickname)} className="px-4 py-2 bg-red-100 text-red-600 rounded-xl text-xs font-bold hover:bg-red-200 transition-all">강퇴</button>)}</div>))}</div></div>
         )}
       </main>
 
       <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 flex justify-around items-center py-2 z-40 pb-safe"><button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'calendar' ? 'text-indigo-600' : 'text-gray-400'}`}><Icons.Calendar /><span className="text-[10px] font-bold">일정</span></button><button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'stats' ? 'text-indigo-600' : 'text-gray-400'}`}><Icons.Chart /><span className="text-[10px] font-bold">통계</span></button><button onClick={() => setActiveTab('board')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'board' ? 'text-indigo-600' : 'text-gray-400'}`}><Icons.Board /><span className="text-[10px] font-bold">팁</span></button>{isAdmin && <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'admin' ? 'text-indigo-600' : 'text-gray-400'}`}><Icons.Admin /><span className="text-[10px] font-bold">관리</span></button>}</nav>
 
       {/* --- 모달들 --- */}
-      {isProfileModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-gray-900">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-gray-500 mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">닉네임</label><input className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">직업</label><select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="bg-indigo-50 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-indigo-100"><span className="text-xs font-bold text-indigo-400">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">저장</button></div></div></div>
-      )}
+      {isProfileModalOpen && (<div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-gray-900">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-gray-500 mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">닉네임</label><input className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">직업</label><select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="bg-indigo-50 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-indigo-100"><span className="text-xs font-bold text-indigo-400">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">저장</button></div></div></div>)}
+      {isCreateModalOpen && (<div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-gray-900">일정 등록</h2><p className="text-indigo-500 mb-6 font-bold text-sm bg-indigo-50 inline-block px-3 py-1 rounded-full">{selectedDate}</p><div className="flex bg-gray-100 p-1 rounded-xl mb-4"><button onClick={() => setRaidType('abyss')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>어비스</button><button onClick={() => setRaidType('raid')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>레이드</button></div><div className="mb-6 text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">던전 선택</label><select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{DUNGEON_DATA[raidType].map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select></div><div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div><input className="w-full bg-gray-50 p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-lg" placeholder="레이드 이름" value={raidTitle} onChange={e => setRaidTitle(e.target.value)} autoFocus /><div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">등록</button></div></div></div>)}
 
-      {/* ★ 등록 모달 (수정됨: 이름 입력창 삭제, 공대장 표시) */}
-      {isCreateModalOpen && (
+      {/* ★ 글쓰기 모달 (파일 업로드 추가) */}
+      {isWriteModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200">
           <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative">
-            <h2 className="text-2xl font-bold mb-1 text-gray-900">일정 등록</h2>
-            <p className="text-indigo-500 mb-6 font-bold text-sm bg-indigo-50 inline-block px-3 py-1 rounded-full">{selectedDate}</p>
+            <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2"><Icons.Board /> 팁 작성하기</h2>
+            <input className="w-full bg-gray-50 p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold" placeholder="제목을 입력하세요" value={postTitle} onChange={e => setPostTitle(e.target.value)} autoFocus />
+            <textarea className="w-full bg-gray-50 p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-indigo-500 transition-all h-40 resize-none" placeholder="내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} />
             
-            {/* 공대장 표시 */}
-            <div className="mb-6 flex items-center justify-center gap-2 bg-indigo-50 p-3 rounded-xl border border-indigo-100">
-              <Icons.Crown />
-              <span className="font-bold text-indigo-700 text-sm">공대장: {myProfile?.nickname || '나'}</span>
+            {/* 사진 & 파일 첨부 버튼 (가로 배치) */}
+            <div className="mb-6 flex gap-2">
+              {/* 사진 첨부 */}
+              <div className="flex-1">
+                <input type="file" accept="image/*" id="img-upload" className="hidden" onChange={handleImageSelect} />
+                <label htmlFor="img-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-gray-100 rounded-xl cursor-pointer hover:bg-gray-200 transition-all text-xs font-bold border border-dashed border-gray-300">
+                  <Icons.Camera /> {selectedImage ? '사진 변경' : '사진 첨부'}
+                </label>
+              </div>
+              {/* 파일 첨부 */}
+              <div className="flex-1">
+                <input type="file" id="file-upload" className="hidden" onChange={handleFileSelect} />
+                <label htmlFor="file-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-gray-100 rounded-xl cursor-pointer hover:bg-gray-200 transition-all text-xs font-bold border border-dashed border-gray-300">
+                  <Icons.Clip /> {selectedFile ? '파일 변경' : '파일 첨부'}
+                </label>
+              </div>
             </div>
 
-            <div className="flex bg-gray-100 p-1 rounded-xl mb-4"><button onClick={() => setRaidType('abyss')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>어비스</button><button onClick={() => setRaidType('raid')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>레이드</button></div>
-            <div className="mb-6 text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">던전 선택</label><select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{DUNGEON_DATA[raidType].map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select></div>
-            <div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div>
-            
-            {/* 레이드 이름 입력창 삭제됨 */}
-            
-            <div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">등록</button></div>
+            {/* 미리보기 영역 */}
+            {(previewUrl || selectedFile) && (
+              <div className="mb-6 space-y-2">
+                {previewUrl && (
+                  <div className="relative w-full h-32 rounded-xl overflow-hidden border border-gray-200">
+                    <img src={previewUrl} className="w-full h-full object-cover" alt="미리보기" />
+                    <button onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"><Icons.Close /></button>
+                  </div>
+                )}
+                {selectedFile && (
+                  <div className="flex items-center justify-between bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <Icons.File />
+                      <span className="text-xs font-bold text-indigo-700 truncate">{selectedFile.name}</span>
+                    </div>
+                    <button onClick={() => setSelectedFile(null)} className="text-gray-400 hover:text-red-500"><Icons.Close /></button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3"><button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button><button onClick={handleWritePost} disabled={uploading} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all disabled:bg-gray-400">{uploading ? '업로드 중...' : '작성완료'}</button></div>
           </div>
         </div>
       )}
 
-      {isWriteModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2"><Icons.Board /> 팁 작성하기</h2><input className="w-full bg-gray-50 p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold" placeholder="제목을 입력하세요" value={postTitle} onChange={e => setPostTitle(e.target.value)} autoFocus /><textarea className="w-full bg-gray-50 p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-indigo-500 transition-all h-40 resize-none" placeholder="내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} /><div className="mb-6"><input type="file" accept="image/*" id="file-upload" className="hidden" onChange={handleImageSelect} /><label htmlFor="file-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-gray-100 rounded-2xl cursor-pointer hover:bg-gray-200 transition-all text-gray-600 font-bold border border-dashed border-gray-300"><Icons.Camera /> {selectedImage ? '사진 변경하기' : '사진 추가하기'}</label>{previewUrl && (<div className="mt-3 relative w-full h-40 rounded-xl overflow-hidden border border-gray-200"><img src={previewUrl} className="w-full h-full object-cover" alt="미리보기" /><button onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1 hover:bg-black/70"><Icons.Close /></button></div>)}</div><div className="flex gap-3"><button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button><button onClick={handleWritePost} disabled={uploading} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all disabled:bg-gray-400">{uploading ? '업로드 중...' : '작성완료'}</button></div></div></div>
-      )}
-
-      {/* ★ 상세 모달 (수정됨: 공대장 정보 표시) */}
-      {isDetailModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200">
-          <div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden">
-            <div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-purple-600' : 'bg-red-600'}`}></div>
-            <div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-gray-300 hover:text-red-500 p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-gray-300 hover:text-black p-2 transition-all"><Icons.Close /></button></div>
-            <h2 className="text-2xl font-extrabold mb-2 pr-20 text-gray-900 leading-tight">{selectedRaid?.title}</h2>
-            
-            {/* 공대장 표시 */}
-            <div className="flex items-center gap-2 mb-6 bg-gray-50 p-2 rounded-xl border border-gray-100 w-fit">
-              <span className="text-xs text-gray-400 font-bold">HOST</span>
-              {selectedRaid?.host_avatar && renderAvatar(selectedRaid.host_avatar, "w-5 h-5")}
-              <span className="text-sm font-bold text-gray-700">{selectedRaid?.host_name || '알수없음'}</span>
-            </div>
-
-            <div className="bg-gray-50 p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-gray-100"><p className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider flex items-center justify-between"><span>참가자 현황</span><span className={`px-2 py-1 rounded-full text-xs ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>{participants.length} / {selectedRaid?.max_members || 4}명</span></p><div className="space-y-3">{participants.length === 0 ? <p className="text-gray-400 text-sm text-center py-4">참가자가 없습니다.</p> : null}{participants.map(p => (<div key={p.id} className="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-gray-100/50"><div className="flex items-center gap-4">{renderAvatar(p.game_class, "w-10 h-10")}<div className="flex flex-col"><span className="font-bold text-sm text-gray-900">{p.user_name}</span><span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide bg-indigo-50 px-2 py-0.5 rounded-md w-fit mt-0.5">{p.game_class}</span></div></div></div>))}</div></div>
-            <div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-red-50 text-red-500 rounded-2xl font-bold hover:bg-red-100 text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={participants.length >= (selectedRaid?.max_members || 4)} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'}`}>{participants.length >= (selectedRaid?.max_members || 4) ? '정원 마감' : '참가하기'}</button>)}</div></div></div>
-      )}
+      {isDetailModalOpen && (<div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden"><div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-purple-600' : 'bg-red-600'}`}></div><div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-gray-300 hover:text-red-500 p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-gray-300 hover:text-black p-2 transition-all"><Icons.Close /></button></div><h2 className="text-2xl font-extrabold mb-6 pr-20 text-gray-900 leading-tight">{selectedRaid?.title}</h2><div className="bg-gray-50 p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-gray-100"><p className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider flex items-center justify-between"><span>참가자 현황</span><span className={`px-2 py-1 rounded-full text-xs ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>{participants.length} / {selectedRaid?.max_members || 4}명</span></p><div className="space-y-3">{participants.length === 0 ? <p className="text-gray-400 text-sm text-center py-4">참가자가 없습니다.</p> : null}{participants.map(p => (<div key={p.id} className="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-gray-100/50"><div className="flex items-center gap-4">{renderAvatar(p.game_class, "w-10 h-10")}<div className="flex flex-col"><span className="font-bold text-sm text-gray-900">{p.user_name}</span><span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide bg-indigo-50 px-2 py-0.5 rounded-md w-fit mt-0.5">{p.game_class}</span></div></div></div>))}</div></div><div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-red-50 text-red-500 rounded-2xl font-bold hover:bg-red-100 text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={participants.length >= (selectedRaid?.max_members || 4)} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'}`}>{participants.length >= (selectedRaid?.max_members || 4) ? '정원 마감' : '참가하기'}</button>)}</div></div></div>)}
     </div>
   );
 }
