@@ -39,10 +39,15 @@ const CLASS_IMAGES: { [key: string]: string } = {
   "도적": "/class-icons/rogue.png", "격투가": "/class-icons/fighter.png", "듀얼블레이드": "/class-icons/dualblade.png"
 };
 
-const DUNGEON_DATA = {
+// ★ 던전 목록 기본값
+//   DB(dungeons 테이블)에 데이터가 없거나 조회에 실패했을 때만 사용됩니다.
+//   실제 목록은 사이트 내 '던전 목록 관리'에서 수정/추가할 수 있습니다.
+const DEFAULT_DUNGEON_DATA: { [key: string]: string[] } = {
   abyss: ["입문", "어려움", "매우 어려움", ...Array.from({ length: 10 }, (_, i) => `지옥 ${i + 1}단계`)],
   raid: ["글라스기브넨 [입문]", "글라스기브넨 [어려움]", "글라스기브넨 [매우 어려움]", "화이트서큐버스", "타바르타스 [입문]", "타바르타스 [어려움]"]
 };
+
+const TYPE_TAG: { [key: string]: string } = { abyss: '[어비스]', raid: '[레이드]' };
 
 const Icons = {
   Calendar: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>),
@@ -157,6 +162,15 @@ export default function RaidScheduler() {
   const [raidType, setRaidType] = useState<'abyss' | 'raid'>('abyss');
   const [selectedDungeon, setSelectedDungeon] = useState('');
   const [maxMembers, setMaxMembers] = useState(4);
+
+  // ★ 던전 목록 관리용 상태
+  const [dungeons, setDungeons] = useState<any[]>([]);
+  const [isDungeonModalOpen, setIsDungeonModalOpen] = useState(false);
+  const [dungeonTab, setDungeonTab] = useState<'abyss' | 'raid'>('abyss');
+  const [newDungeonName, setNewDungeonName] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState('');
+
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedRaid, setSelectedRaid] = useState<any>(null);
   const [participants, setParticipants] = useState<any[]>([]);
@@ -183,15 +197,23 @@ export default function RaidScheduler() {
     if (activeTab === 'admin') fetchAllProfiles();
   }, [activeTab, statsFilter]);
 
+  // ★ 현재 사용할 던전 이름 목록 (DB 우선, 없으면 기본값)
+  const dungeonList = (type: 'abyss' | 'raid'): string[] => {
+    const rows = dungeons.filter(d => d.type === type);
+    if (rows.length > 0) return rows.map(d => d.name);
+    return DEFAULT_DUNGEON_DATA[type];
+  };
+
   useEffect(() => {
-    if (isCreateModalOpen) setSelectedDungeon(DUNGEON_DATA[raidType][0]);
-  }, [raidType, isCreateModalOpen]);
+    if (isCreateModalOpen) setSelectedDungeon(dungeonList(raidType)[0] || '');
+  }, [raidType, isCreateModalOpen, dungeons]);
 
   const initialize = async () => {
     setIsLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session) { setUser(session.user); await loadProfile(session.user.id); }
     await fetchRaids();
+    await fetchDungeons();
     setIsLoading(false);
   };
 
@@ -215,6 +237,78 @@ export default function RaidScheduler() {
   const fetchRaids = async () => { const { data } = await supabase.from('raids').select('*'); if (data) { setRaids(data.map((raid) => ({ id: raid.id, title: raid.title, date: raid.start_time.split('T')[0], created_by_email: raid.created_by_email, host_name: raid.host_name, host_avatar: raid.host_avatar, max_members: raid.max_members, backgroundColor: raid.title.includes('어비스') || raid.title.includes('지옥') ? '#7C3AED' : '#DC2626', borderColor: 'transparent' }))); } };
   const fetchStats = async () => { const { data: participants } = await supabase.from('participants').select('user_name, game_class, raids (title)'); if (participants) { const countMap: { [key: string]: { count: number; job: string } } = {}; participants.forEach((p: any) => { const raidTitle = p.raids?.title || ""; if (statsFilter === 'abyss' && !raidTitle.includes('어비스') && !raidTitle.includes('지옥')) return; if (statsFilter === 'raid' && !raidTitle.includes('레이드')) return; if (countMap[p.user_name]) countMap[p.user_name].count += 1; else countMap[p.user_name] = { count: 1, job: p.game_class || '모험가' }; }); const chartData = Object.keys(countMap).map((name) => ({ name: name, count: countMap[name].count, job: countMap[name].job })).sort((a, b) => b.count - a.count); setStatsData(chartData); } };
   const fetchPosts = async () => { const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false }); if (data) setPosts(data); };
+
+  // ================= ★ 던전 목록 관리 =================
+  const fetchDungeons = async () => {
+    const { data, error } = await supabase
+      .from('dungeons')
+      .select('*')
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
+    if (error) { console.error('던전 목록 조회 실패(기본값 사용):', error.message); return; }
+    if (data) setDungeons(data);
+  };
+
+  // 처음 한 번: 기본 던전 목록을 DB에 밀어넣기
+  const handleSeedDungeons = async () => {
+    if (!confirm('기본 던전 목록을 DB에 저장할까요?\n(최초 1회만 실행하세요)')) return;
+    const rows: any[] = [];
+    (['abyss', 'raid'] as const).forEach(type => {
+      DEFAULT_DUNGEON_DATA[type].forEach((name, i) => rows.push({ type, name, sort_order: i + 1 }));
+    });
+    const { error } = await supabase.from('dungeons').insert(rows);
+    if (error) return alert('저장 실패: ' + error.message);
+    await fetchDungeons();
+  };
+
+  const handleAddDungeon = async () => {
+    const name = newDungeonName.trim();
+    if (!name) return alert('던전 이름을 입력해주세요.');
+    if (dungeons.some(d => d.type === dungeonTab && d.name === name)) return alert('이미 같은 이름의 던전이 있습니다.');
+    const maxOrder = dungeons.filter(d => d.type === dungeonTab).reduce((m, d) => Math.max(m, d.sort_order ?? 0), 0);
+    const { error } = await supabase.from('dungeons').insert([{ type: dungeonTab, name, sort_order: maxOrder + 1 }]);
+    if (error) return alert('추가 실패: ' + error.message);
+    setNewDungeonName('');
+    await fetchDungeons();
+  };
+
+  const handleRenameDungeon = async (row: any) => {
+    const name = editingName.trim();
+    if (!name) return alert('이름을 입력해주세요.');
+    if (name === row.name) { setEditingId(null); setEditingName(''); return; }
+    if (dungeons.some(d => d.type === row.type && d.name === name)) return alert('이미 같은 이름의 던전이 있습니다.');
+
+    const { error } = await supabase.from('dungeons').update({ name }).eq('id', row.id);
+    if (error) return alert('수정 실패: ' + error.message);
+
+    // 이미 등록된 일정 제목도 함께 바꿀지 물어보기
+    const tag = TYPE_TAG[row.type];
+    const oldTitle = `${tag} ${row.name}`;
+    const newTitle = `${tag} ${name}`;
+    if (confirm(`이미 캘린더에 등록된 "${oldTitle}" 일정의 제목도\n"${newTitle}" 로 함께 변경할까요?`)) {
+      await supabase.from('raids').update({ title: newTitle }).eq('title', oldTitle);
+      await fetchRaids();
+    }
+
+    setEditingId(null); setEditingName('');
+    await fetchDungeons();
+  };
+
+  const handleDeleteDungeon = async (row: any) => {
+    if (!confirm(`'${row.name}' 던전을 목록에서 삭제할까요?\n(이미 등록된 일정은 그대로 남습니다)`)) return;
+    const { error } = await supabase.from('dungeons').delete().eq('id', row.id);
+    if (error) return alert('삭제 실패: ' + error.message);
+    await fetchDungeons();
+  };
+
+  const openDungeonModal = () => {
+    setDungeonTab(raidType);
+    setEditingId(null);
+    setEditingName('');
+    setNewDungeonName('');
+    setIsDungeonModalOpen(true);
+  };
+  // ====================================================
   
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { const file = e.target.files[0]; setSelectedImage(file); setPreviewUrl(URL.createObjectURL(file)); } };
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) { setSelectedFile(e.target.files[0]); } };
@@ -262,10 +356,10 @@ export default function RaidScheduler() {
   const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
   const refreshParticipants = async (raidId: any) => { const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setParticipants(data || []); };
   const renderAvatar = (gameClass: string, size = "w-10 h-10") => { let imagePath = CLASS_IMAGES[gameClass] || "/class-icons/default.png"; return <img src={imagePath} className={`${size} rounded-full object-cover border border-gray-200 bg-white`} alt={gameClass} onError={(e) => { (e.target as HTMLImageElement).src = "/class-icons/default.png"; }} />; };
-  const handleAddToCalendar = () => { if (!selectedRaid) return; const title = encodeURIComponent(`[길드] ${selectedRaid.title}`); const details = encodeURIComponent("던컨의 장난감가게 일정"); const dateStr = selectedRaid.date.replace(/-/g, ""); const dates = `${dateStr}/${dateStr}`; const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`; window.open(url, '_blank'); };
+  const handleAddToCalendar = () => { if (!selectedRaid) return; const title = encodeURIComponent(`[길드] ${selectedRaid.title}`); const details = encodeURIComponent("Star guild 일정"); const dateStr = selectedRaid.date.replace(/-/g, ""); const dates = `${dateStr}/${dateStr}`; const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`; window.open(url, '_blank'); };
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-xl font-bold text-gray-400">로딩중...</div>;
-  if (!user) return <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50 p-4"><div className="bg-white p-10 rounded-[2rem] shadow-xl border border-gray-100 text-center max-w-sm w-full"><h1 className="text-3xl font-extrabold mb-8 text-gray-800">Guild Scheduler</h1><button onClick={handleLogin} className="w-full bg-white border-2 border-gray-200 p-4 rounded-2xl font-bold flex justify-center items-center gap-3 hover:bg-gray-50 transition-all text-black"><span className="text-2xl">G</span> <span>구글 아이디로 시작</span></button></div></div>;
+  if (!user) return <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50 p-4"><div className="bg-white p-10 rounded-[2rem] shadow-xl border border-gray-100 text-center max-w-sm w-full"><h1 className="text-3xl font-extrabold mb-8 text-gray-800">Star guild</h1><button onClick={handleLogin} className="w-full bg-white border-2 border-gray-200 p-4 rounded-2xl font-bold flex justify-center items-center gap-3 hover:bg-gray-50 transition-all text-black"><span className="text-2xl">G</span> <span>구글 아이디로 시작</span></button></div></div>;
 
   const isJoined = participants.some(p => p.user_email === user.email);
   const isMyRaid = isAdmin || (selectedRaid?.created_by_email === user.email);
@@ -284,7 +378,7 @@ export default function RaidScheduler() {
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg transform rotate-3 hover:rotate-0 transition-all cursor-pointer p-1">
             <Image src="/icon.png" alt="로고" width={32} height={32} className="w-full h-full object-contain rounded-lg" />
           </div>
-          <span className="font-extrabold text-lg md:text-xl tracking-tight text-gray-900">던컨의 장난감가게</span>
+          <span className="font-extrabold text-lg md:text-xl tracking-tight text-gray-900">Star guild</span>
         </div>
         <nav className="hidden md:flex items-center gap-2 bg-gray-50 p-1.5 rounded-full border border-gray-100">
           <TabButton tabName="calendar" label="일정" icon={<Icons.Calendar />} />
@@ -343,7 +437,7 @@ export default function RaidScheduler() {
           </div>
         ) : (
           // 관리자 탭 (기존과 동일)
-          <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-full"><h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2"><Icons.Admin /> 회원 관리</h3><div className="space-y-4">{allProfiles.map(member => (<div key={member.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100"><div className="flex items-center gap-4">{renderAvatar(member.game_class, "w-10 h-10")}<div><div className="font-bold text-gray-900 flex items-center gap-2">{member.nickname} {member.role === 'admin' && <span className="bg-black text-white text-[10px] px-2 py-0.5 rounded-full">ADMIN</span>}</div><div className="text-xs text-gray-500">{member.game_class}</div></div></div>{member.id !== user.id && member.role !== 'admin' && (<button onClick={() => handleDeleteMember(member.id, member.nickname)} className="px-4 py-2 bg-red-100 text-red-600 rounded-xl text-xs font-bold hover:bg-red-200 transition-all">강퇴</button>)}</div>))}</div></div>
+          <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 h-full"><div className="flex items-center justify-between mb-6"><h3 className="text-xl font-bold text-gray-900 flex items-center gap-2"><Icons.Admin /> 회원 관리</h3><button onClick={openDungeonModal} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-md active:scale-95"><Icons.Edit /> 던전 목록 관리</button></div><div className="space-y-4">{allProfiles.map(member => (<div key={member.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100"><div className="flex items-center gap-4">{renderAvatar(member.game_class, "w-10 h-10")}<div><div className="font-bold text-gray-900 flex items-center gap-2">{member.nickname} {member.role === 'admin' && <span className="bg-black text-white text-[10px] px-2 py-0.5 rounded-full">ADMIN</span>}</div><div className="text-xs text-gray-500">{member.game_class}</div></div></div>{member.id !== user.id && member.role !== 'admin' && (<button onClick={() => handleDeleteMember(member.id, member.nickname)} className="px-4 py-2 bg-red-100 text-red-600 rounded-xl text-xs font-bold hover:bg-red-200 transition-all">강퇴</button>)}</div>))}</div></div>
         )}
       </main>
 
@@ -359,10 +453,84 @@ export default function RaidScheduler() {
       {isProfileModalOpen && (<div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-gray-900">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-gray-500 mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">닉네임</label><input className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">직업</label><select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="bg-indigo-50 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-indigo-100"><span className="text-xs font-bold text-indigo-400">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">저장</button></div></div></div>)}
       
       {/* ★ 등록 모달 (날짜 선택 수정됨) */}
-      {isCreateModalOpen && (<div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-gray-900">일정 등록</h2><input type="date" className="w-full bg-gray-50 p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-gray-600 cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-gray-100 p-1 rounded-xl mb-4"><button onClick={() => setRaidType('abyss')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>어비스</button><button onClick={() => setRaidType('raid')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>레이드</button></div><div className="mb-6 text-left"><label className="block text-xs font-bold text-gray-400 mb-2 ml-1">던전 선택</label><select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{DUNGEON_DATA[raidType].map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select></div><div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div><div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">등록</button></div></div></div>)}
+      {isCreateModalOpen && (<div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-gray-900">일정 등록</h2><input type="date" className="w-full bg-gray-50 p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-gray-600 cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-gray-100 p-1 rounded-xl mb-4"><button onClick={() => setRaidType('abyss')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>어비스</button><button onClick={() => setRaidType('raid')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>레이드</button></div><div className="mb-6 text-left">
+        <div className="flex items-center justify-between mb-2 px-1">
+          <label className="block text-xs font-bold text-gray-400">던전 선택</label>
+          {/* ★ 관리자만 보이게 하려면 아래 true 를 isAdmin 으로 바꾸세요 */}
+          {true && (<button onClick={openDungeonModal} className="flex items-center gap-1 text-xs font-bold text-indigo-500 hover:text-indigo-700 transition-colors"><Icons.Edit /> 목록 편집</button>)}
+        </div>
+        <select className="w-full bg-gray-50 p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{dungeonList(raidType).map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select>
+      </div><div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div><div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all">등록</button></div></div></div>)}
 
       {isWriteModalOpen && (<div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2"><Icons.Board /> 팁 작성하기</h2><input className="w-full bg-gray-50 p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold" placeholder="제목을 입력하세요" value={postTitle} onChange={e => setPostTitle(e.target.value)} autoFocus /><textarea className="w-full bg-gray-50 p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-indigo-500 transition-all h-40 resize-none" placeholder="내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} /><div className="mb-6"><div className="flex gap-2 mb-2"><div className="flex-1"><input type="file" accept="image/*" id="img-upload" className="hidden" onChange={handleImageSelect} /><label htmlFor="img-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-gray-100 rounded-xl cursor-pointer hover:bg-gray-200 transition-all text-xs font-bold border border-dashed border-gray-300"><Icons.Camera /> {selectedImage ? '사진 변경' : '사진 첨부'}</label></div><div className="flex-1"><input type="file" id="file-upload" className="hidden" onChange={handleFileSelect} /><label htmlFor="file-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-gray-100 rounded-xl cursor-pointer hover:bg-gray-200 transition-all text-xs font-bold border border-dashed border-gray-300"><Icons.Clip /> {selectedFile ? '파일 변경' : '파일 첨부'}</label></div></div>{(previewUrl || selectedFile) && (<div className="space-y-2">{previewUrl && (<div className="relative w-full h-32 rounded-xl overflow-hidden border border-gray-200"><img src={previewUrl} className="w-full h-full object-cover" alt="미리보기" /><button onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"><Icons.Close /></button></div>)}{selectedFile && (<div className="flex items-center justify-between bg-indigo-50 p-3 rounded-xl border border-indigo-100"><div className="flex items-center gap-2 overflow-hidden"><Icons.File /><span className="text-xs font-bold text-indigo-700 truncate">{selectedFile.name}</span></div><button onClick={() => setSelectedFile(null)} className="text-gray-400 hover:text-red-500"><Icons.Close /></button></div>)}</div>)}</div><div className="flex gap-3"><button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:bg-gray-200 transition-colors">취소</button><button onClick={handleWritePost} disabled={uploading} className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 shadow-lg transition-all disabled:bg-gray-400">{uploading ? '업로드 중...' : '작성완료'}</button></div></div></div>)}
       {isDetailModalOpen && (<div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-white p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden"><div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-purple-600' : 'bg-red-600'}`}></div><div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-gray-300 hover:text-red-500 p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-gray-300 hover:text-black p-2 transition-all"><Icons.Close /></button></div><h2 className="text-2xl font-extrabold mb-2 pr-20 text-gray-900 leading-tight">{selectedRaid?.title}</h2><div className="flex items-center gap-2 mb-6 bg-gray-50 p-2 rounded-xl border border-gray-100 w-fit"><span className="text-xs text-gray-400 font-bold">HOST</span>{selectedRaid?.host_avatar && renderAvatar(selectedRaid.host_avatar, "w-5 h-5")}<span className="text-sm font-bold text-gray-700">{selectedRaid?.host_name || '알수없음'}</span></div><div className="bg-gray-50 p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-gray-100"><p className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider flex items-center justify-between"><span>참가자 현황</span><span className={`px-2 py-1 rounded-full text-xs ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>{participants.length} / {selectedRaid?.max_members || 4}명</span></p><div className="space-y-3">{participants.length === 0 ? <p className="text-gray-400 text-sm text-center py-4">참가자가 없습니다.</p> : null}{participants.map(p => (<div key={p.id} className="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-gray-100/50"><div className="flex items-center gap-4">{renderAvatar(p.game_class, "w-10 h-10")}<div className="flex flex-col"><span className="font-bold text-sm text-gray-900">{p.user_name}</span><span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide bg-indigo-50 px-2 py-0.5 rounded-md w-fit mt-0.5">{p.game_class}</span></div></div></div>))}</div></div><div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-red-50 text-red-500 rounded-2xl font-bold hover:bg-red-100 text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={participants.length >= (selectedRaid?.max_members || 4)} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'}`}>{participants.length >= (selectedRaid?.max_members || 4) ? '정원 마감' : '참가하기'}</button>)}</div></div></div>)}
+
+      {/* ★ 던전 목록 관리 모달 */}
+      {isDungeonModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex justify-center items-center z-[10000] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">던전 목록 관리</h2>
+              <button onClick={() => setIsDungeonModalOpen(false)} className="text-gray-300 hover:text-black p-1 transition-all"><Icons.Close /></button>
+            </div>
+
+            <div className="flex bg-gray-100 p-1 rounded-xl mb-4">
+              <button onClick={() => { setDungeonTab('abyss'); setEditingId(null); }} className={`flex-1 py-2 rounded-lg font-bold transition-all ${dungeonTab === 'abyss' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>어비스</button>
+              <button onClick={() => { setDungeonTab('raid'); setEditingId(null); }} className={`flex-1 py-2 rounded-lg font-bold transition-all ${dungeonTab === 'raid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'}`}>레이드</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto -mx-1 px-1 mb-4">
+              {dungeons.filter(d => d.type === dungeonTab).length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                  <p className="text-sm text-gray-500 mb-1 font-bold">아직 DB에 저장된 목록이 없습니다.</p>
+                  <p className="text-xs text-gray-400 mb-4">지금은 코드에 있는 기본 목록이 사용 중입니다.</p>
+                  <button onClick={handleSeedDungeons} className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all">기본 목록 불러오기</button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {dungeons.filter(d => d.type === dungeonTab).map(row => (
+                    <div key={row.id} className="flex items-center gap-2 bg-gray-50 p-2 rounded-2xl border border-gray-100">
+                      {editingId === row.id ? (
+                        <>
+                          <input
+                            className="flex-1 bg-white px-3 py-2 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500 min-w-0"
+                            value={editingName}
+                            onChange={e => setEditingName(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleRenameDungeon(row); if (e.key === 'Escape') setEditingId(null); }}
+                            autoFocus
+                          />
+                          <button onClick={() => handleRenameDungeon(row)} className="px-3 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 shrink-0">저장</button>
+                          <button onClick={() => { setEditingId(null); setEditingName(''); }} className="px-3 py-2 bg-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-300 shrink-0">취소</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-1 px-2 font-bold text-sm text-gray-800 truncate">{row.name}</span>
+                          <button onClick={() => { setEditingId(row.id); setEditingName(row.name); }} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all shrink-0" title="이름 수정"><Icons.Edit /></button>
+                          <button onClick={() => handleDeleteDungeon(row)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-white rounded-lg transition-all shrink-0" title="삭제"><Icons.Trash /></button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <label className="block text-xs font-bold text-gray-400 mb-2 ml-1">새 던전 추가</label>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 bg-gray-50 px-4 py-3 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-indigo-500 min-w-0"
+                  placeholder={dungeonTab === 'abyss' ? '예) 지옥 11단계' : '예) 신규 레이드 [입문]'}
+                  value={newDungeonName}
+                  onChange={e => setNewDungeonName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddDungeon(); }}
+                />
+                <button onClick={handleAddDungeon} className="px-5 py-3 bg-indigo-600 text-white rounded-2xl font-bold text-sm hover:bg-indigo-700 shadow-md transition-all shrink-0">추가</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ★ 이미지 확대 보기 모달 (Lightbox) */}
       {viewImage && (
