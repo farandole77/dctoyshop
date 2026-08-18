@@ -50,6 +50,7 @@ const DEFAULT_DUNGEON_DATA: { [key: string]: string[] } = {
 const TYPE_TAG: { [key: string]: string } = { abyss: '[어비스]', raid: '[레이드]' };
 
 const Icons = {
+  Home: () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/></svg>),
   Calendar: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>),
   Chart: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>),
   Board: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>),
@@ -150,7 +151,7 @@ export default function RaidScheduler() {
   const [myProfile, setMyProfile] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [raids, setRaids] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'calendar' | 'stats' | 'board' | 'admin' | 'voice'>('calendar');
+  const [activeTab, setActiveTab] = useState<'home' | 'calendar' | 'stats' | 'board' | 'admin' | 'voice'>('home');
   const calendarRef = useRef<FullCalendar>(null);
   
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -162,6 +163,9 @@ export default function RaidScheduler() {
   const [raidType, setRaidType] = useState<'abyss' | 'raid'>('abyss');
   const [selectedDungeon, setSelectedDungeon] = useState('');
   const [maxMembers, setMaxMembers] = useState(4);
+
+  // ★ 모바일 홈 화면용: 일정별 참가 인원수
+  const [raidCounts, setRaidCounts] = useState<{ [key: string]: number }>({});
 
   // ★ 던전 목록 관리용 상태
   const [dungeons, setDungeons] = useState<any[]>([]);
@@ -213,6 +217,7 @@ export default function RaidScheduler() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) { setUser(session.user); await loadProfile(session.user.id); }
     await fetchRaids();
+    await fetchRaidCounts();
     await fetchDungeons();
     setIsLoading(false);
   };
@@ -237,6 +242,27 @@ export default function RaidScheduler() {
   const fetchRaids = async () => { const { data } = await supabase.from('raids').select('*'); if (data) { setRaids(data.map((raid) => ({ id: raid.id, title: raid.title, date: raid.start_time.split('T')[0], created_by_email: raid.created_by_email, host_name: raid.host_name, host_avatar: raid.host_avatar, max_members: raid.max_members, backgroundColor: raid.title.includes('어비스') || raid.title.includes('지옥') ? '#4a3f7d' : '#6d3a46', borderColor: 'transparent' }))); } };
   const fetchStats = async () => { const { data: participants } = await supabase.from('participants').select('user_name, game_class, raids (title)'); if (participants) { const countMap: { [key: string]: { count: number; job: string } } = {}; participants.forEach((p: any) => { const raidTitle = p.raids?.title || ""; if (statsFilter === 'abyss' && !raidTitle.includes('어비스') && !raidTitle.includes('지옥')) return; if (statsFilter === 'raid' && !raidTitle.includes('레이드')) return; if (countMap[p.user_name]) countMap[p.user_name].count += 1; else countMap[p.user_name] = { count: 1, job: p.game_class || '모험가' }; }); const chartData = Object.keys(countMap).map((name) => ({ name: name, count: countMap[name].count, job: countMap[name].job })).sort((a, b) => b.count - a.count); setStatsData(chartData); } };
   const fetchPosts = async () => { const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false }); if (data) setPosts(data); };
+
+  // ★ 일정별 참가 인원수 (모바일 홈/일정 카드에 표시)
+  const fetchRaidCounts = async () => {
+    const { data } = await supabase.from('participants').select('raid_id');
+    if (!data) return;
+    const map: { [key: string]: number } = {};
+    data.forEach((p: any) => { map[p.raid_id] = (map[p.raid_id] || 0) + 1; });
+    setRaidCounts(map);
+  };
+
+  // ★ 목록 카드에서 상세 모달 열기 (캘린더 클릭과 동일한 동작)
+  const openRaidDetail = async (raid: any) => {
+    const { data } = await supabase.from('participants').select('*').eq('raid_id', raid.id);
+    setSelectedRaid({
+      id: raid.id, title: raid.title, date: raid.date,
+      created_by_email: raid.created_by_email, max_members: raid.max_members || 4,
+      host_name: raid.host_name, host_avatar: raid.host_avatar,
+    });
+    setParticipants(data || []);
+    setIsDetailModalOpen(true);
+  };
 
   // ================= ★ 던전 목록 관리 =================
   const fetchDungeons = async () => {
@@ -354,7 +380,7 @@ export default function RaidScheduler() {
   const handleJoin = async () => { if (!myProfile) return alert('프로필 필요'); const limit = selectedRaid.max_members || 4; if (participants.length >= limit) return alert(`🚫 정원이 꽉 찼습니다! (최대 ${limit}명)`); await supabase.from('participants').insert([{ raid_id: selectedRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); refreshParticipants(selectedRaid.id); };
   const handleLeave = async () => { const isHost = selectedRaid.created_by_email === user.email; if (isHost && participants.length <= 1) { if (!confirm("파티가 해체됩니다. 삭제하시겠습니까?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); } else { if (!confirm("취소?")) return; await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email); refreshParticipants(selectedRaid.id); } };
   const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
-  const refreshParticipants = async (raidId: any) => { const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setParticipants(data || []); };
+  const refreshParticipants = async (raidId: any) => { const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setParticipants(data || []); await fetchRaidCounts(); };
   const renderAvatar = (gameClass: string, size = "w-10 h-10") => { let imagePath = CLASS_IMAGES[gameClass] || "/class-icons/default.png"; return <img src={imagePath} className={`${size} rounded-full object-cover border border-[#343848] bg-[#232532]`} alt={gameClass} onError={(e) => { (e.target as HTMLImageElement).src = "/class-icons/default.png"; }} />; };
   const handleAddToCalendar = () => { if (!selectedRaid) return; const title = encodeURIComponent(`[길드] ${selectedRaid.title}`); const details = encodeURIComponent("Star guild 일정"); const dateStr = selectedRaid.date.replace(/-/g, ""); const dates = `${dateStr}/${dateStr}`; const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`; window.open(url, '_blank'); };
 
@@ -363,6 +389,130 @@ export default function RaidScheduler() {
 
   const isJoined = participants.some(p => p.user_email === user.email);
   const isMyRaid = isAdmin || (selectedRaid?.created_by_email === user.email);
+
+  // ================= ★ 모바일 홈 화면 =================
+  const todayStr = new Date().toISOString().split('T')[0];
+  const upcomingRaids = [...raids]
+    .filter(r => r.date >= todayStr)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const nextRaid: any = upcomingRaids[0];
+
+  const isAbyss = (title: string) => title.includes('어비스') || title.includes('지옥');
+
+  const dDayLabel = (dateStr: string) => {
+    const diff = Math.round(
+      (new Date(dateStr + 'T00:00:00').getTime() - new Date(todayStr + 'T00:00:00').getTime())
+      / 86400000
+    );
+    if (diff === 0) return '오늘';
+    if (diff === 1) return '내일';
+    return `D-${diff}`;
+  };
+
+  const whenLabel = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const wd = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
+    return `${d.getMonth() + 1}월 ${d.getDate()}일 (${wd})`;
+  };
+
+  // 모바일 홈 · 파티 카드
+  const PartyRow = ({ raid }: { raid: any }) => {
+    const filled = raidCounts[raid.id] || 0;
+    const max = raid.max_members || 4;
+    const abyss = isAbyss(raid.title);
+    return (
+      <button
+        onClick={() => openRaidDetail(raid)}
+        className="w-full bg-[#232532] border border-[#2c2f3d] rounded-2xl p-3 flex items-center gap-3 text-left active:scale-[0.99] transition-all"
+      >
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${abyss ? 'bg-[#2b2741] text-[#b5abfc]' : 'bg-[#33202b] text-[#eda3a3]'}`}>
+          {abyss ? <Icons.Calendar /> : <Icons.Chart />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`text-[11px] px-2 py-0.5 rounded-md ${abyss ? 'bg-[#423a6a] text-[#f5f4ff]' : 'bg-[#4d2b36] text-[#f4bcbc]'}`}>
+              {abyss ? '어비스' : '레이드'}
+            </span>
+            <span className="text-[11px] text-[#8b8fa3]">{whenLabel(raid.date)}</span>
+          </div>
+          <div className="text-sm truncate">{raid.title}</div>
+          <div className="text-[11px] text-[#8b8fa3] mt-0.5">파티장 {raid.host_name || '알수없음'}</div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className={`text-[15px] ${filled >= max ? 'text-[#eda3a3]' : 'text-[#b5abfc]'}`}>{filled}/{max}</div>
+          <div className="text-[10px] text-[#75798c]">{filled >= max ? '마감' : '모집중'}</div>
+        </div>
+      </button>
+    );
+  };
+
+  const MobileHome = () => (
+    <div className="md:hidden">
+      <div className="mb-5">
+        <div className="text-[10px] tracking-[0.1em] uppercase text-[#9184d9]">알리사 · Star guild</div>
+        <h2 className="text-[26px] mt-1 leading-tight">오늘 어디 가지?</h2>
+      </div>
+
+      {nextRaid ? (
+        <div className="bg-[#232532] border border-[#2c2f3d] rounded-2xl p-4 relative overflow-hidden mb-6">
+          <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(135deg, rgba(145,132,217,.16), transparent 60%)' }} />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className={`text-[11px] px-2.5 py-0.5 rounded-md ${isAbyss(nextRaid.title) ? 'bg-[#423a6a] text-[#f5f4ff]' : 'bg-[#4d2b36] text-[#f4bcbc]'}`}>
+                {isAbyss(nextRaid.title) ? '어비스' : '레이드'}
+              </span>
+              <span className="text-[11px] text-[#b5abfc] tracking-wide">{dDayLabel(nextRaid.date)}</span>
+            </div>
+            <h3 className="text-[21px] leading-tight mb-1">{nextRaid.title}</h3>
+            <div className="text-[12px] text-[#8b8fa3] mb-3.5">
+              {whenLabel(nextRaid.date)} · 파티장 {nextRaid.host_name || '알수없음'}
+            </div>
+            <div className="flex items-center gap-1.5 mb-3.5">
+              {Array.from({ length: nextRaid.max_members || 4 }).map((_, i) => {
+                const taken = i < (raidCounts[nextRaid.id] || 0);
+                return (
+                  <div key={i} className={`flex-1 h-9 rounded-lg flex items-center justify-center text-[10px] ${taken ? 'bg-[#2b2741] text-[#b5abfc] ring-1 ring-inset ring-[#423a6a]' : 'ring-1 ring-inset ring-[#2c2f3d] text-[#75798c]'}`}>
+                    {taken ? '참가' : '빈자리'}
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => openRaidDetail(nextRaid)}
+              className="w-full min-h-[42px] rounded-xl border border-[#9184d9] text-[#b5abfc] active:bg-[#9184d9]/20 transition-all"
+            >
+              상세 · 참가
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-[#232532] border border-dashed border-[#343848] rounded-2xl p-8 text-center mb-6">
+          <p className="text-sm text-[#9397ab] mb-1">예정된 일정이 없습니다.</p>
+          <p className="text-[11px] text-[#75798c] mb-4">첫 파티를 열어보세요.</p>
+          <button onClick={openCreateModal} className="px-5 py-2.5 rounded-xl border border-[#9184d9] text-[#b5abfc] text-sm">
+            일정 등록
+          </button>
+        </div>
+      )}
+
+      <div className="flex items-baseline justify-between mb-2.5">
+        <h4 className="text-[16px]">다가오는 일정</h4>
+        <span className="text-[11px] text-[#8b8fa3]">{upcomingRaids.length}개</span>
+      </div>
+      <div className="flex flex-col gap-2">
+        {upcomingRaids.slice(0, 12).map(raid => <PartyRow key={raid.id} raid={raid} />)}
+        {upcomingRaids.length === 0 && (
+          <p className="text-[12px] text-[#75798c] py-6 text-center">표시할 일정이 없습니다.</p>
+        )}
+      </div>
+
+      <div className="h-px my-5" style={{ background: 'linear-gradient(to right, transparent, rgba(233,233,237,.16) 40px, rgba(233,233,237,.16) calc(100% - 40px), transparent)' }} />
+      <button onClick={() => setActiveTab('calendar')} className="w-full text-[12px] text-[#8b8fa3] py-2">
+        달력으로 보기 →
+      </button>
+    </div>
+  );
+  // ====================================================
 
   const TabButton = ({ tabName, label, icon }: { tabName: string, label: string, icon: any }) => (
     <button onClick={() => setActiveTab(tabName as any)} className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold transition-all duration-200 text-sm md:text-base ${activeTab === tabName ? 'bg-[#9184d9] text-[#161826] shadow-md transform scale-105' : 'text-[#9397ab] hover:bg-[#272a38] hover:text-[#e9e9ed]'}`}>
@@ -399,7 +549,16 @@ export default function RaidScheduler() {
       </header>
 
       <main className="flex-1 overflow-y-auto p-4 md:p-8 max-w-7xl mx-auto w-full pb-24 md:pb-8 relative">
-        {activeTab === 'calendar' ? (
+        {activeTab === 'home' ? (
+          <>
+            <MobileHome />
+            {/* 데스크톱에는 홈 탭이 없으므로 캘린더를 보여줍니다 */}
+            <div className="hidden md:flex bg-[#232532] p-8 rounded-3xl border border-[#2c2f3d] h-full flex-col">
+              <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={raids} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
+            </div>
+            <button onClick={openCreateModal} className="fixed bottom-24 right-6 md:bottom-10 md:right-10 bg-[#9184d9] text-[#161826] p-4 rounded-full shadow-lg hover:bg-[#a396e4] transition-all z-50 active:scale-95" title="일정 등록"><Icons.Plus /></button>
+          </>
+        ) : activeTab === 'calendar' ? (
           <div className="bg-[#232532] p-4 md:p-8 rounded-3xl border border-[#2c2f3d] h-full flex flex-col">
             <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={raids} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
             {/* ★ 1. 플로팅 등록 버튼 (FAB) - 캘린더 탭일 때만 보임 */}
@@ -441,8 +600,9 @@ export default function RaidScheduler() {
         )}
       </main>
 
-      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-[#232532] border-t border-[#343848] flex justify-around items-center py-2 z-40 pb-safe">
-        <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'calendar' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Calendar /><span className="text-[10px] font-bold">일정</span></button>
+      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-[#161826]/88 backdrop-blur-xl border-t border-[#2c2f3d] flex justify-around items-center py-2 z-40 pb-safe">
+        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'home' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Home /><span className="text-[10px] font-bold">홈</span></button>
+        <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'calendar' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Calendar /><span className="text-[10px] font-bold">달력</span></button>
         <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'stats' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Chart /><span className="text-[10px] font-bold">통계</span></button>
         <button onClick={() => setActiveTab('board')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'board' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Board /><span className="text-[10px] font-bold">팁</span></button>
         <button onClick={() => setActiveTab('voice')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'voice' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Mic /><span className="text-[10px] font-bold">보이스</span></button>
