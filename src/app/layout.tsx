@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "던컨의 장난감가게",
-  description: "마비노기모바일 알리사 서버 길드 커뮤니티입니다.",
+  title: "Star guild",
+  description: "마비노기모바일 알리사 서버 Star 길드 커뮤니티입니다.",
 };
 
 export default function RootLayout({
