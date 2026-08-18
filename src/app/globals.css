@@ -1,96 +1,143 @@
 @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
 @import "tailwindcss";
 
+/* ============================================================
+   Star guild — Nocturne 다크 테마 토큰
+   색을 바꾸고 싶으면 여기 값만 고치면 전체가 따라갑니다.
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg:        #161826;  /* 페이지 바닥 */
+  --surface:   #232532;  /* 카드 / 모달 */
+  --surface-2: #1c1e2b;  /* 입력창처럼 한 단 들어간 면 */
+  --text:      #e9e9ed;
+  --muted:     #9397ab;
+  --divider:   #2c2f3d;
+  --accent:    #9184d9;  /* 블러플 액센트 */
+  --accent-lo: #423a6a;  /* 액센트 틴트 배경 */
+  --accent-hi: #b5abfc;  /* 액센트 글자 */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+html { color-scheme: dark; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto,
+    "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR",
+    "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
 }
 
-/* ... 기존 코드 아래에 추가하세요 ... */
+/* 폼 요소가 OS 기본 밝은 색으로 튀는 것 방지 */
+input, select, textarea, button { color: inherit; }
+select option { background: var(--surface); color: var(--text); }
+input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); cursor: pointer; }
+::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* 캘린더 전체 폰트 및 테두리 제거 */
+/* 스크롤바 */
+* { scrollbar-color: #3f424d transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #3f424d; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ============================================================
+   FullCalendar — 다크 재정의
+   (라이브러리 내부 마크업이라 Tailwind로는 닿지 않습니다)
+   ============================================================ */
 .fc {
-  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  font-family: inherit;
   border: none !important;
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: transparent;
+  --fc-border-color: var(--divider);
+  --fc-today-bg-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  --fc-now-indicator-color: var(--accent);
+  --fc-list-event-hover-bg-color: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
 }
 
-/* 캘린더 헤더 (월/년도) 스타일 */
+/* 월/년도 타이틀 */
 .fc-toolbar-title {
-  font-size: 1.5rem !important;
-  font-weight: 200 !important;
-  color: #314157;
+  font-size: 1.35rem !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 
-/* 요일 (Sun, Mon...) 헤더 */
+/* 요일 헤더 */
 .fc-col-header-cell {
   background-color: transparent !important;
   border: none !important;
+  border-bottom: 1px solid var(--divider) !important;
   padding: 10px 0 !important;
-  color: #6b7280;
+  color: var(--muted);
   text-transform: uppercase;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+/* 날짜 칸 */
+.fc-theme-standard td,
+.fc-theme-standard th,
+.fc-scrollgrid { border-color: var(--divider) !important; }
+.fc-daygrid-day { border: 1px solid var(--divider) !important; }
+.fc-daygrid-day-frame { padding: 4px; }
+.fc-daygrid-day-number { color: var(--text); font-size: 0.82rem; opacity: 0.85; }
+
+/* 지난달 / 다음달 날짜는 뒤로 물리기 */
+.fc-day-other .fc-daygrid-day-number { opacity: 0.3; }
+
+/* 오늘 */
+.fc-day-today { background-color: var(--fc-today-bg-color) !important; }
+.fc-day-today .fc-daygrid-day-number {
+  color: var(--accent-hi);
   font-weight: 700;
+  opacity: 1;
 }
 
-/* 날짜 칸 스타일 */
-.fc-daygrid-day {
-  border: 1px solid #f3f4f6 !important; /* 아주 연한 회색 테두리 */
-}
-.fc-daygrid-day-frame {
-  padding: 4px;
-}
+/* 주말 */
+.fc-day-sat .fc-daygrid-day-number { color: #a8b6e0; }
+.fc-day-sun .fc-daygrid-day-number { color: #e0a8b0; }
 
-/* 오늘 날짜 강조 */
-.fc-day-today {
-  background-color: #dce9fa !important; /* 연한 파란색 배경 */
-}
-
-/* 이벤트(파란 바) 스타일 - 둥글게 */
+/* 일정 칩 */
 .fc-event {
   border-radius: 8px !important;
-  padding: 2px 4px !important;
-  font-size: 0.85rem !important;
+  padding: 2px 6px !important;
+  font-size: 0.78rem !important;
   font-weight: 600 !important;
   border: none !important;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent);
+  cursor: pointer;
 }
+.fc-event:hover { filter: brightness(1.25); }
+.fc-event-title, .fc-event-time { color: var(--text); }
+.fc-daygrid-more-link { color: var(--accent-hi) !important; font-size: 0.72rem; }
 
-/* 버튼 스타일 (Prev, Next, Today) */
+/* 이전 / 다음 / 오늘 버튼 — 채우지 않고 외곽선으로 */
 .fc-button {
-  background-color: white !important;
-  border: 1px solid #e5e7eb !important;
-  color: #374151 !important;
+  background-color: transparent !important;
+  border: 1px solid var(--divider) !important;
+  color: var(--text) !important;
   font-weight: 600 !important;
-  border-radius: 12px !important;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  transition: all 0.2s;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  transition: all 0.18s;
 }
 .fc-button:hover {
-  background-color: #f9fafb !important;
-  transform: translateY(-1px);
+  background-color: color-mix(in srgb, var(--text) 7%, transparent) !important;
 }
-.fc-button-active {
-  background-color: #57a0ff !important;
-  color: white !important;
-  border-color: #57a0ff !important;
+.fc-button:disabled { opacity: 0.35 !important; }
+.fc-button-active,
+.fc-button:active {
+  background-color: color-mix(in srgb, var(--accent) 18%, transparent) !important;
+  color: var(--accent-hi) !important;
+  border-color: var(--accent) !important;
 }
+.fc-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 리스트(모바일) 뷰 */
+.fc-list { border-color: var(--divider) !important; }
+.fc-list-day-cushion { background: var(--surface-2) !important; color: var(--text) !important; }
+.fc-list-event td { border-color: var(--divider) !important; }
+.fc-list-empty { background: transparent !important; color: var(--muted) !important; }
