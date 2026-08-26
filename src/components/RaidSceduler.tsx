@@ -6,7 +6,6 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
 import { supabase } from '@/lib/supabase';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import Image from 'next/image';
 
 // LiveKit (음성 채팅) 관련 임포트
@@ -164,6 +163,16 @@ export default function RaidScheduler() {
   const [selectedDungeon, setSelectedDungeon] = useState('');
   const [maxMembers, setMaxMembers] = useState(4);
 
+  // ★ 프로필: 인게임 캐릭터 정보
+  const [newCharName, setNewCharName] = useState('');
+  const [newCombat, setNewCombat] = useState('');
+  const [newLife, setNewLife] = useState('');
+  const [newCharm, setNewCharm] = useState('');
+
+  // ★ 길드원 순위
+  const [rankRows, setRankRows] = useState<any[]>([]);
+  const [rankWeek, setRankWeek] = useState<string>('');
+
   // ★ 모바일 홈 화면용: 일정별 참가 인원수
   const [raidCounts, setRaidCounts] = useState<{ [key: string]: number }>({});
 
@@ -178,8 +187,6 @@ export default function RaidScheduler() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedRaid, setSelectedRaid] = useState<any>(null);
   const [participants, setParticipants] = useState<any[]>([]);
-  const [statsData, setStatsData] = useState<any[]>([]);
-  const [statsFilter, setStatsFilter] = useState<'all' | 'abyss' | 'raid'>('all');
   const [posts, setPosts] = useState<any[]>([]);
   const [isWriteModalOpen, setIsWriteModalOpen] = useState(false);
   const [postTitle, setPostTitle] = useState('');
@@ -196,10 +203,10 @@ export default function RaidScheduler() {
 
   useEffect(() => { initialize(); }, []);
   useEffect(() => {
-    if (activeTab === 'stats') fetchStats();
+    if (activeTab === 'stats') fetchGuildRanking();
     if (activeTab === 'board') fetchPosts();
     if (activeTab === 'admin') fetchAllProfiles();
-  }, [activeTab, statsFilter]);
+  }, [activeTab]);
 
   // ★ 현재 사용할 던전 이름 목록 (DB 우선, 없으면 기본값)
   const dungeonList = (type: 'abyss' | 'raid'): string[] => {
@@ -236,11 +243,31 @@ export default function RaidScheduler() {
   const handleDeleteMember = async (memberId: string, memberName: string) => { if (!confirm(`정말 '${memberName}' 회원을 강퇴하시겠습니까?`)) return; await supabase.from('profiles').delete().eq('id', memberId); alert("삭제되었습니다."); fetchAllProfiles(); };
   const handleLogin = async () => { await supabase.auth.signInWithOAuth({ provider: 'google', options: { queryParams: { access_type: 'offline', prompt: 'consent' } } }); };
   const handleLogout = async () => { await supabase.auth.signOut(); window.location.reload(); };
-  const handleSaveProfile = async () => { if (!newNickname) return alert("입력해주세요!"); const newProfile = { id: user.id, nickname: newNickname, game_class: newClass }; const { error } = await supabase.from('profiles').upsert([newProfile]); if (!error) { setMyProfile(newProfile); setIsProfileModalOpen(false); } };
-  const openEditProfile = () => { if (myProfile) { setNewNickname(myProfile.nickname); setNewClass(myProfile.game_class); } setIsProfileModalOpen(true); };
+  const handleSaveProfile = async () => {
+    if (!newNickname) return alert("입력해주세요!");
+    const toInt = (v: string) => { const n = parseInt(v.replace(/[^0-9]/g, ''), 10); return Number.isFinite(n) ? n : null; };
+    const newProfile: any = {
+      id: user.id, nickname: newNickname, game_class: newClass,
+      character_name: newCharName.trim() || null,
+      combat_power: toInt(newCombat), life_power: toInt(newLife), charm_power: toInt(newCharm),
+      score_updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from('profiles').upsert([newProfile]);
+    if (!error) { setMyProfile(newProfile); setIsProfileModalOpen(false); } else { alert('저장 실패: ' + error.message); }
+  };
+  const openEditProfile = () => {
+    if (myProfile) {
+      setNewNickname(myProfile.nickname);
+      setNewClass(myProfile.game_class);
+      setNewCharName(myProfile.character_name || '');
+      setNewCombat(myProfile.combat_power ? String(myProfile.combat_power) : '');
+      setNewLife(myProfile.life_power ? String(myProfile.life_power) : '');
+      setNewCharm(myProfile.charm_power ? String(myProfile.charm_power) : '');
+    }
+    setIsProfileModalOpen(true);
+  };
   
   const fetchRaids = async () => { const { data } = await supabase.from('raids').select('*'); if (data) { setRaids(data.map((raid) => ({ id: raid.id, title: raid.title, date: raid.start_time.split('T')[0], created_by_email: raid.created_by_email, host_name: raid.host_name, host_avatar: raid.host_avatar, max_members: raid.max_members, backgroundColor: raid.title.includes('어비스') || raid.title.includes('지옥') ? '#bfe6f7' : '#ffd3da', borderColor: 'transparent' }))); } };
-  const fetchStats = async () => { const { data: participants } = await supabase.from('participants').select('user_name, game_class, raids (title)'); if (participants) { const countMap: { [key: string]: { count: number; job: string } } = {}; participants.forEach((p: any) => { const raidTitle = p.raids?.title || ""; if (statsFilter === 'abyss' && !raidTitle.includes('어비스') && !raidTitle.includes('지옥')) return; if (statsFilter === 'raid' && !raidTitle.includes('레이드')) return; if (countMap[p.user_name]) countMap[p.user_name].count += 1; else countMap[p.user_name] = { count: 1, job: p.game_class || '모험가' }; }); const chartData = Object.keys(countMap).map((name) => ({ name: name, count: countMap[name].count, job: countMap[name].job })).sort((a, b) => b.count - a.count); setStatsData(chartData); } };
   const fetchPosts = async () => { const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false }); if (data) setPosts(data); };
 
   // ★ 일정별 참가 인원수 (모바일 홈/일정 카드에 표시)
@@ -514,6 +541,93 @@ export default function RaidScheduler() {
   );
   // ====================================================
 
+  // ================= ★ 길드원 순위 =================
+  // 이번 주 월요일 (KST)
+  const mondayOf = (d: Date) => {
+    const kst = new Date(d.getTime() + 9 * 3600 * 1000);
+    const day = kst.getUTCDay();
+    const diff = day === 0 ? 6 : day - 1;
+    return new Date(kst.getTime() - diff * 86400000).toISOString().split('T')[0];
+  };
+
+  const fetchGuildRanking = async () => {
+    const thisWeek = mondayOf(new Date());
+    const lastWeek = new Date(new Date(thisWeek).getTime() - 7 * 86400000).toISOString().split('T')[0];
+
+    // 최신 스냅샷 (아직 이번 주 것이 없으면 가장 최근 주)
+    let { data: cur } = await supabase.from('guild_rankings').select('*').eq('week_start', thisWeek).order('guild_rank');
+    let curWeek = thisWeek;
+    if (!cur || cur.length === 0) {
+      const { data: latest } = await supabase.from('guild_rankings').select('week_start').order('week_start', { ascending: false }).limit(1);
+      if (latest && latest.length > 0) {
+        curWeek = latest[0].week_start;
+        const r = await supabase.from('guild_rankings').select('*').eq('week_start', curWeek).order('guild_rank');
+        cur = r.data || [];
+      }
+    }
+    if (!cur || cur.length === 0) { setRankRows([]); setRankWeek(''); return; }
+
+    const prevWeek = curWeek === thisWeek ? lastWeek
+      : new Date(new Date(curWeek).getTime() - 7 * 86400000).toISOString().split('T')[0];
+    const { data: prevRows } = await supabase.from('guild_rankings').select('character_name, guild_rank').eq('week_start', prevWeek);
+    const prevMap = new Map((prevRows || []).map((r: any) => [r.character_name, r.guild_rank]));
+
+    // 이번 주 참여 횟수 — 일정표에서 참가 버튼을 누른 것
+    const weekEnd = new Date(new Date(curWeek).getTime() + 6 * 86400000).toISOString().split('T')[0];
+    const { data: joins } = await supabase
+      .from('participants')
+      .select('user_name, raids!inner(title, date)')
+      .gte('raids.date', curWeek)
+      .lte('raids.date', weekEnd);
+
+    const abyssCnt: { [k: string]: number } = {};
+    const raidCnt: { [k: string]: number } = {};
+    (joins || []).forEach((j: any) => {
+      const t = j.raids?.title || '';
+      const who = j.user_name;
+      if (t.includes('어비스') || t.includes('지옥')) abyssCnt[who] = (abyssCnt[who] || 0) + 1;
+      else raidCnt[who] = (raidCnt[who] || 0) + 1;
+    });
+
+    setRankWeek(curWeek);
+    setRankRows(cur.map((r: any) => {
+      const before = prevMap.get(r.character_name);
+      return {
+        ...r,
+        change: before == null ? null : before - r.guild_rank, // +면 상승
+        isNew: before == null,
+        abyss: abyssCnt[r.nickname] || 0,
+        raid: raidCnt[r.nickname] || 0,
+      };
+    }));
+  };
+
+  // 순위 변동 표시 (사진처럼 화살표 + 칸수)
+  const RankDelta = ({ change, isNew }: { change: number | null; isNew: boolean }) => {
+    if (isNew) return <span className="text-[10px] font-bold text-[#0b7fae] bg-[#cfeafa] px-1.5 py-0.5 rounded">NEW</span>;
+    if (change === null || change === 0) return <span className="text-[#e0526a] font-bold">—</span>;
+    const up = change > 0;
+    return (
+      <span className={`inline-flex items-center gap-0.5 font-bold ${up ? 'text-[#e0526a]' : 'text-[#2f6fd0]'}`}>
+        <span className="text-sm leading-none">{up ? '▲' : '▼'}</span>
+        <span className="text-xs">{Math.abs(change)}</span>
+      </span>
+    );
+  };
+
+  // 1~3위 메달
+  const RankBadge = ({ rank }: { rank: number }) => {
+    const medal = rank === 1 ? { bg: '#ffc94d', fg: '#7a4b00' }
+      : rank === 2 ? { bg: '#cfe0ea', fg: '#3d5866' }
+      : rank === 3 ? { bg: '#e8b487', fg: '#6b3d16' } : null;
+    if (!medal) return <span className="w-7 h-7 inline-flex items-center justify-center text-sm font-bold text-[#4a7d97]">{rank}</span>;
+    return (
+      <span className="w-7 h-7 inline-flex items-center justify-center rounded-full text-xs font-extrabold shadow-sm"
+        style={{ background: medal.bg, color: medal.fg }}>{rank}</span>
+    );
+  };
+  // ================================================
+
   const TabButton = ({ tabName, label, icon }: { tabName: string, label: string, icon: any }) => (
     <button onClick={() => setActiveTab(tabName as any)} className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold transition-all duration-200 text-sm md:text-base ${activeTab === tabName ? 'bg-[#17a2d9] text-white shadow-md transform scale-105' : 'text-[#5d87a1] hover:bg-[#e6f2fb] hover:text-[#0f3f57]'}`}>
       {icon}<span>{label}</span>
@@ -532,7 +646,7 @@ export default function RaidScheduler() {
         </div>
         <nav className="hidden md:flex items-center gap-2 bg-[#eef7fe] p-1.5 rounded-full border border-[#cfe6f5]">
           <TabButton tabName="calendar" label="일정" icon={<Icons.Calendar />} />
-          <TabButton tabName="stats" label="통계" icon={<Icons.Chart />} />
+          <TabButton tabName="stats" label="순위" icon={<Icons.Chart />} />
           <TabButton tabName="board" label="팁" icon={<Icons.Board />} />
           {/* ★ 보이스 탭 복구 */}
           <TabButton tabName="voice" label="보이스" icon={<Icons.Mic />} />
@@ -571,9 +685,79 @@ export default function RaidScheduler() {
             </button>
           </div>
         ) : activeTab === 'stats' ? (
-          // 통계 탭 (기존과 동일)
-          <div className="space-y-6">
-            <div className="bg-[#ffffff] p-6 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-[500px]"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-[#164a63] flex items-center gap-2"><Icons.Chart /> 참여 랭킹</h3><div className="flex bg-[#e6f2fb] p-1 rounded-xl"><button onClick={() => setStatsFilter('all')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'all' ? 'bg-[#ffffff] text-[#0f3f57] shadow-sm' : 'text-[#6d94ac] hover:text-[#cfd3e5]'}`}>전체</button><button onClick={() => setStatsFilter('abyss')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'abyss' ? 'bg-[#ffffff] text-[#0f3f57] shadow-sm' : 'text-[#6d94ac] hover:text-[#cfd3e5]'}`}>어비스</button><button onClick={() => setStatsFilter('raid')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'raid' ? 'bg-[#ffffff] text-[#0f3f57] shadow-sm' : 'text-[#6d94ac] hover:text-[#cfd3e5]'}`}>레이드</button></div></div><ResponsiveContainer width="100%" height="90%"><BarChart data={statsData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#cfe6f5" /><XAxis type="number" hide /><YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 14, fontWeight: 'bold', fill: '#4a7d97' }} /><Tooltip cursor={{ fill: '#eef7fe' }} contentStyle={{ borderRadius: '12px', border: '1px solid #a7d1e9', background: '#ffffff', color: '#0f3f57', boxShadow: '0 12px 32px rgba(20,110,150,0.18)' }} /><Bar dataKey="count" barSize={30} radius={[0, 10, 10, 0]}>{statsData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.name === myProfile?.nickname ? '#17a2d9' : '#a7d1e9'} />))}</Bar></BarChart></ResponsiveContainer></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{statsData.map((user, index) => (<div key={user.name} className={`bg-[#ffffff] p-5 rounded-2xl flex items-center justify-between shadow-sm border ${user.name === myProfile?.nickname ? 'border-[#17a2d9] ring-1 ring-[#17a2d9] bg-[#e4f4fd]' : 'border-[#cfe6f5]'}`}><div className="flex items-center gap-4"><span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${index < 3 ? 'bg-[#17a2d9] text-white' : 'bg-[#e6f2fb] text-[#5d87a1]'}`}>{index + 1}</span><div><div className="font-bold text-[#0f3f57]">{user.name}</div><div className="text-xs text-[#5d87a1] font-medium">{user.job}</div></div></div><div className={`font-extrabold text-lg ${user.name === myProfile?.nickname ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}>{user.count}회</div></div>))}</div>
+          // ★ 길드원 순위
+          <div className="bg-[#ffffff] p-4 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)]">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
+              <h3 className="text-lg md:text-xl font-bold text-[#0f3f57] flex items-center gap-2">🏆 길드원 순위</h3>
+              <span className="text-[11px] text-[#6d94ac]">
+                {rankWeek ? `${rankWeek} 기준 · 매주 월요일 갱신` : '아직 집계된 순위가 없습니다'}
+              </span>
+            </div>
+
+            {rankRows.length === 0 ? (
+              <div className="text-center py-16 text-[#6d94ac]">
+                <p className="font-bold mb-1">아직 순위 데이터가 없습니다.</p>
+                <p className="text-xs text-[#87a9bd]">프로필에 인게임 캐릭터명을 등록하면 다음 월요일부터 집계됩니다.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+                <table className="w-full min-w-[560px] border-collapse">
+                  <thead>
+                    <tr className="text-[11px] text-[#5d87a1] border-b border-[#cfe6f5]">
+                      <th className="text-left font-bold py-2.5 pl-1 w-20">순위</th>
+                      <th className="text-left font-bold py-2.5">캐릭터명</th>
+                      <th className="text-left font-bold py-2.5 hidden sm:table-cell">클래스</th>
+                      <th className="text-center font-bold py-2.5 w-16">어비스</th>
+                      <th className="text-center font-bold py-2.5 w-16">레이드</th>
+                      <th className="text-right font-bold py-2.5 pr-1 w-24">종합 점수</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rankRows.map(r => {
+                      const isMe = myProfile && (r.nickname === myProfile.nickname || r.character_name === myProfile.character_name);
+                      return (
+                        <tr key={r.character_name}
+                          className={`border-b border-[#eef7fe] transition-colors ${isMe ? 'bg-[#e4f4fd]' : 'hover:bg-[#f5fbff]'}`}>
+                          <td className="py-3 pl-1">
+                            <div className="flex items-center gap-1.5">
+                              <RankBadge rank={r.guild_rank} />
+                              <RankDelta change={r.change} isNew={r.isNew} />
+                            </div>
+                          </td>
+                          <td className="py-3">
+                            <div className="flex items-center gap-2.5">
+                              {renderAvatar(r.game_class, "w-8 h-8")}
+                              <div className="min-w-0">
+                                <div className={`text-sm font-bold truncate ${isMe ? 'text-[#0b7fae]' : 'text-[#0f3f57]'}`}>{r.character_name}</div>
+                                {r.nickname && r.nickname !== r.character_name && (
+                                  <div className="text-[10px] text-[#87a9bd] truncate">{r.nickname}</div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 text-xs text-[#4a7d97] hidden sm:table-cell">{r.game_class || '-'}</td>
+                          <td className="py-3 text-center">
+                            <span className={`inline-block min-w-[30px] px-2 py-1 rounded-lg text-xs font-bold ${r.abyss > 0 ? 'bg-[#cfeafa] text-[#06465f]' : 'text-[#a7d1e9]'}`}>{r.abyss}</span>
+                          </td>
+                          <td className="py-3 text-center">
+                            <span className={`inline-block min-w-[30px] px-2 py-1 rounded-lg text-xs font-bold ${r.raid > 0 ? 'bg-[#ffd6de] text-[#b32f47]' : 'text-[#a7d1e9]'}`}>{r.raid}</span>
+                          </td>
+                          <td className="py-3 pr-1 text-right">
+                            <div className="text-sm font-bold text-[#0f3f57] tabular-nums">{(r.total_score || 0).toLocaleString()}</div>
+                            {r.official_rank && <div className="text-[10px] text-[#87a9bd]">공식 {r.official_rank}위</div>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <p className="text-[11px] text-[#87a9bd] mt-5 leading-relaxed">
+              어비스 · 레이드 횟수는 이번 주(월~일) 일정표에서 참가 버튼을 누른 횟수입니다.
+              순위 변동은 지난주 순위 대비 오르내린 칸수입니다.
+            </p>
           </div>
         ) : activeTab === 'board' ? (
           // 게시판 탭 (기존과 동일)
@@ -603,14 +787,14 @@ export default function RaidScheduler() {
       <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white/85 backdrop-blur-xl border-t border-[#cfe6f5] flex justify-around items-center py-2 z-40 pb-safe">
         <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'home' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Home /><span className="text-[10px] font-bold">홈</span></button>
         <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'calendar' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Calendar /><span className="text-[10px] font-bold">달력</span></button>
-        <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'stats' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Chart /><span className="text-[10px] font-bold">통계</span></button>
+        <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'stats' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Chart /><span className="text-[10px] font-bold">순위</span></button>
         <button onClick={() => setActiveTab('board')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'board' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Board /><span className="text-[10px] font-bold">팁</span></button>
         <button onClick={() => setActiveTab('voice')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'voice' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Mic /><span className="text-[10px] font-bold">보이스</span></button>
         {isAdmin && <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'admin' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Admin /><span className="text-[10px] font-bold">관리</span></button>}
       </nav>
 
       {/* --- 모달들 (기존과 동일) --- */}
-      {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
+      {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">인게임 캐릭터명</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" placeholder="랭킹에 표시할 캐릭터명" value={newCharName} onChange={(e) => setNewCharName(e.target.value)} /><p className="text-[10px] text-[#87a9bd] mt-1.5 ml-1">공식 랭킹 1,000위 안에 들면 점수가 자동으로 채워집니다.</p></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">내 점수 (선택)</label><div className="grid grid-cols-3 gap-2">{[{l:'전투력',v:newCombat,f:setNewCombat},{l:'생활력',v:newLife,f:setNewLife},{l:'매력',v:newCharm,f:setNewCharm}].map(x => (<div key={x.l}><input className="w-full bg-[#eef7fe] px-2 py-3 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="0" value={x.v} onChange={(e) => x.f(e.target.value)} /><div className="text-[10px] text-[#6d94ac] text-center mt-1">{x.l}</div></div>))}</div></div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
       
       {/* ★ 등록 모달 (날짜 선택 수정됨) */}
       {isCreateModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-[#0f3f57]">일정 등록</h2><input type="date" className="w-full bg-[#eef7fe] p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-[#17a2d9] font-medium text-[#4a7d97] cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-4"><button onClick={() => setRaidType('abyss')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-[#ffffff] text-[#0b7fae] shadow-sm' : 'text-[#6d94ac]'}`}>어비스</button><button onClick={() => setRaidType('raid')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-[#ffffff] text-[#0b7fae] shadow-sm' : 'text-[#6d94ac]'}`}>레이드</button></div><div className="mb-6 text-left">
