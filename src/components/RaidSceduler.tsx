@@ -48,7 +48,14 @@ const DEFAULT_DUNGEON_DATA: { [key: string]: string[] } = {
 
 const TYPE_TAG: { [key: string]: string } = { abyss: '[어비스]', raid: '[레이드]' };
 
+// 어비스 계열인지 (달력 색상 · 축약 글자수 · 통계 분류에 함께 씁니다)
+const isAbyssTitle = (title: string) => title.includes('어비스') || title.includes('지옥');
+
+// 달력에 쓸 닉네임 축약 — 어비스는 앞 2글자, 레이드는 앞 1글자
+const shortNick = (nick: string, abyss: boolean) => (nick || '').trim().slice(0, abyss ? 2 : 1);
+
 const Icons = {
+  Heart: () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 0 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"/></svg>),
   Home: () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/></svg>),
   Calendar: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>),
   Chart: () => (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>),
@@ -150,7 +157,7 @@ export default function RaidScheduler() {
   const [myProfile, setMyProfile] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [raids, setRaids] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'home' | 'calendar' | 'stats' | 'board' | 'admin' | 'voice'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'calendar' | 'stats' | 'paper' | 'board' | 'admin' | 'voice'>('home');
   const calendarRef = useRef<FullCalendar>(null);
   
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -169,6 +176,27 @@ export default function RaidScheduler() {
   const [newLife, setNewLife] = useState('');
   const [newCharm, setNewCharm] = useState('');
 
+  // ★ 어비스 기록
+  const [rankMode, setRankMode] = useState<'power' | 'abyss'>('power');
+  const [abyssRows, setAbyssRows] = useState<any[]>([]);
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [recDungeon, setRecDungeon] = useState('');
+  const [recMin, setRecMin] = useState('');
+  const [recSec, setRecSec] = useState('');
+  const [recScore, setRecScore] = useState('');
+  const [recMemo, setRecMemo] = useState('');
+
+  // ★ 롤링페이퍼
+  const [papers, setPapers] = useState<any[]>([]);
+  const [paperTarget, setPaperTarget] = useState('');
+  const [isPaperModalOpen, setIsPaperModalOpen] = useState(false);
+  const [pTo, setPTo] = useState('');
+  const [pMood, setPMood] = useState('💌');
+  const [pTitle, setPTitle] = useState('');
+  const [pMsg, setPMsg] = useState('');
+  const [pPoint, setPPoint] = useState('');
+  const [pAnon, setPAnon] = useState(false);
+
   // ★ 길드원 순위
   const rankSelfHealed = useRef(false);   // 자동 갱신은 세션당 한 번만
   const [rankRows, setRankRows] = useState<any[]>([]);
@@ -176,6 +204,8 @@ export default function RaidScheduler() {
 
   // ★ 모바일 홈 화면용: 일정별 참가 인원수
   const [raidCounts, setRaidCounts] = useState<{ [key: string]: number }>({});
+  const [raidNames, setRaidNames] = useState<{ [key: string]: string[] }>({});
+  const [raidRows, setRaidRows] = useState<any[]>([]);
 
   // ★ 던전 목록 관리용 상태
   const [dungeons, setDungeons] = useState<any[]>([]);
@@ -204,10 +234,22 @@ export default function RaidScheduler() {
 
   useEffect(() => { initialize(); }, []);
   useEffect(() => {
-    if (activeTab === 'stats') fetchGuildRanking();
+    if (activeTab === 'stats') { fetchGuildRanking(); fetchAbyssRecords(); }
+    if (activeTab === 'paper') fetchPapers();
     if (activeTab === 'board') fetchPosts();
     if (activeTab === 'admin') fetchAllProfiles();
   }, [activeTab]);
+
+  // ★ 달력에 표시할 이벤트 — 제목 자리에 참가자 닉네임을 넣습니다.
+  //    어비스는 앞 2글자, 레이드는 앞 1글자로 줄여 한 칸에 여러 명이 들어가게 합니다.
+  const calendarEvents = raids.map(ev => {
+    const abyss = isAbyssTitle(ev.title);
+    const names = raidNames[ev.id] || [];
+    const label = names.length > 0
+      ? names.map(n => shortNick(n, abyss)).join(' ')
+      : '모집중';
+    return { ...ev, title: label, extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title } };
+  });
 
   // ★ 현재 사용할 던전 이름 목록 (DB 우선, 없으면 기본값)
   const dungeonList = (type: 'abyss' | 'raid'): string[] => {
@@ -289,16 +331,33 @@ export default function RaidScheduler() {
     setIsProfileModalOpen(true);
   };
   
-  const fetchRaids = async () => { const { data } = await supabase.from('raids').select('*'); if (data) { setRaids(data.map((raid) => ({ id: raid.id, title: raid.title, date: raid.start_time.split('T')[0], created_by_email: raid.created_by_email, host_name: raid.host_name, host_avatar: raid.host_avatar, max_members: raid.max_members, backgroundColor: raid.title.includes('어비스') || raid.title.includes('지옥') ? '#bfe6f7' : '#ffd3da', borderColor: 'transparent' }))); } };
+  const fetchRaids = async () => {
+    const { data } = await supabase.from('raids').select('*');
+    if (data) {
+      setRaidRows(data);
+      setRaids(data.map((raid) => ({
+        id: raid.id, title: raid.title, date: raid.start_time.split('T')[0],
+        created_by_email: raid.created_by_email, host_name: raid.host_name, host_avatar: raid.host_avatar,
+        max_members: raid.max_members,
+        backgroundColor: isAbyssTitle(raid.title) ? '#bfe6f7' : '#ffd3da',
+        borderColor: 'transparent',
+      })));
+    }
+  };
   const fetchPosts = async () => { const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false }); if (data) setPosts(data); };
 
-  // ★ 일정별 참가 인원수 (모바일 홈/일정 카드에 표시)
+  // ★ 일정별 참가자 명단 (달력 · 모바일 홈에 닉네임으로 표시)
   const fetchRaidCounts = async () => {
-    const { data } = await supabase.from('participants').select('raid_id');
+    const { data } = await supabase.from('participants').select('raid_id, user_name').order('id');
     if (!data) return;
-    const map: { [key: string]: number } = {};
-    data.forEach((p: any) => { map[p.raid_id] = (map[p.raid_id] || 0) + 1; });
-    setRaidCounts(map);
+    const counts: { [key: string]: number } = {};
+    const names: { [key: string]: string[] } = {};
+    data.forEach((p: any) => {
+      counts[p.raid_id] = (counts[p.raid_id] || 0) + 1;
+      (names[p.raid_id] = names[p.raid_id] || []).push(p.user_name);
+    });
+    setRaidCounts(counts);
+    setRaidNames(names);
   };
 
   // ★ 목록 카드에서 상세 모달 열기 (캘린더 클릭과 동일한 동작)
@@ -425,7 +484,7 @@ export default function RaidScheduler() {
     if (newRaid) { await supabase.from('participants').insert([{ raid_id: newRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); }
     setRaidTitle(''); setMaxMembers(4); setIsCreateModalOpen(false); fetchRaids(); 
   };
-  const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar }); setParticipants(data || []); setIsDetailModalOpen(true); };
+  const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.extendedProps.realTitle || arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar }); setParticipants(data || []); setIsDetailModalOpen(true); };
   const handleJoin = async () => { if (!myProfile) return alert('프로필 필요'); const limit = selectedRaid.max_members || 4; if (participants.length >= limit) return alert(`🚫 정원이 꽉 찼습니다! (최대 ${limit}명)`); await supabase.from('participants').insert([{ raid_id: selectedRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); refreshParticipants(selectedRaid.id); };
   const handleLeave = async () => { const isHost = selectedRaid.created_by_email === user.email; if (isHost && participants.length <= 1) { if (!confirm("파티가 해체됩니다. 삭제하시겠습니까?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); } else { if (!confirm("취소?")) return; await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email); refreshParticipants(selectedRaid.id); } };
   const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
@@ -445,8 +504,6 @@ export default function RaidScheduler() {
     .filter(r => r.date >= todayStr)
     .sort((a, b) => a.date.localeCompare(b.date));
   const nextRaid: any = upcomingRaids[0];
-
-  const isAbyss = (title: string) => title.includes('어비스') || title.includes('지옥');
 
   const dDayLabel = (dateStr: string) => {
     const diff = Math.round(
@@ -468,7 +525,7 @@ export default function RaidScheduler() {
   const PartyRow = ({ raid }: { raid: any }) => {
     const filled = raidCounts[raid.id] || 0;
     const max = raid.max_members || 4;
-    const abyss = isAbyss(raid.title);
+    const abyss = isAbyssTitle(raid.title);
     return (
       <button
         onClick={() => openRaidDetail(raid)}
@@ -507,8 +564,8 @@ export default function RaidScheduler() {
           <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(135deg, rgba(23,162,217,.18), transparent 60%)' }} />
           <div className="relative">
             <div className="flex items-center justify-between mb-2.5">
-              <span className={`text-[11px] px-2.5 py-0.5 rounded-md ${isAbyss(nextRaid.title) ? 'bg-[#cfeafa] text-[#06465f]' : 'bg-[#ffd6de] text-[#b32f47]'}`}>
-                {isAbyss(nextRaid.title) ? '어비스' : '레이드'}
+              <span className={`text-[11px] px-2.5 py-0.5 rounded-md ${isAbyssTitle(nextRaid.title) ? 'bg-[#cfeafa] text-[#06465f]' : 'bg-[#ffd6de] text-[#b32f47]'}`}>
+                {isAbyssTitle(nextRaid.title) ? '어비스' : '레이드'}
               </span>
               <span className="text-[11px] text-[#0b7fae] tracking-wide">{dDayLabel(nextRaid.date)}</span>
             </div>
@@ -518,10 +575,10 @@ export default function RaidScheduler() {
             </div>
             <div className="flex items-center gap-1.5 mb-3.5">
               {Array.from({ length: nextRaid.max_members || 4 }).map((_, i) => {
-                const taken = i < (raidCounts[nextRaid.id] || 0);
+                const who = (raidNames[nextRaid.id] || [])[i];
                 return (
-                  <div key={i} className={`flex-1 h-9 rounded-lg flex items-center justify-center text-[10px] ${taken ? 'bg-[#e4f4fd] text-[#0b7fae] ring-1 ring-inset ring-[#cfeafa]' : 'ring-1 ring-inset ring-[#cfe6f5] text-[#87a9bd]'}`}>
-                    {taken ? '참가' : '빈자리'}
+                  <div key={i} title={who || '빈자리'} className={`flex-1 h-9 px-1 rounded-lg flex items-center justify-center text-[10px] font-bold truncate ${who ? 'bg-[#e4f4fd] text-[#0b7fae] ring-1 ring-inset ring-[#cfeafa]' : 'ring-1 ring-inset ring-[#cfe6f5] text-[#87a9bd] font-normal'}`}>
+                    {who || '빈자리'}
                   </div>
                 );
               })}
@@ -631,6 +688,104 @@ export default function RaidScheduler() {
     }));
   };
 
+  // ================= ★ 어비스 기록 =================
+  const fmtTime = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+
+  const fetchAbyssRecords = async () => {
+    const { data } = await supabase.from('abyss_records').select('*');
+    if (!data) return;
+    // 개인별 최고 기록만 (점수 높은 순 → 같으면 빠른 순)
+    const best: { [k: string]: any } = {};
+    data.forEach((r: any) => {
+      const cur = best[r.nickname];
+      if (!cur || r.score > cur.score || (r.score === cur.score && r.clear_seconds < cur.clear_seconds)) best[r.nickname] = r;
+    });
+    const rows = Object.values(best).sort((a: any, b: any) =>
+      b.score - a.score || a.clear_seconds - b.clear_seconds);
+    setAbyssRows(rows.map((r: any, i) => ({ ...r, rank: i + 1 })));
+  };
+
+  const openRecordModal = () => {
+    if (!myProfile) return alert('먼저 프로필을 설정해주세요.');
+    setRecDungeon(dungeonList('abyss')[0] || '');
+    setRecMin(''); setRecSec(''); setRecScore(''); setRecMemo('');
+    setIsRecordModalOpen(true);
+  };
+
+  const handleSaveRecord = async () => {
+    const sec = (parseInt(recMin || '0', 10) || 0) * 60 + (parseInt(recSec || '0', 10) || 0);
+    const score = parseInt(recScore.replace(/[^0-9]/g, ''), 10) || 0;
+    if (!recDungeon) return alert('던전을 선택해주세요.');
+    if (sec <= 0) return alert('클리어 시간을 입력해주세요.');
+    const { error } = await supabase.from('abyss_records').insert([{
+      user_id: user.id, nickname: myProfile.nickname, game_class: myProfile.game_class,
+      dungeon_name: recDungeon, clear_seconds: sec, score, memo: recMemo.trim() || null,
+    }]);
+    if (error) return alert('저장 실패: ' + error.message);
+    setIsRecordModalOpen(false);
+    await fetchAbyssRecords();
+  };
+
+  const handleDeleteRecord = async (row: any) => {
+    if (!confirm('이 기록을 삭제할까요?')) return;
+    const { error } = await supabase.from('abyss_records').delete().eq('id', row.id);
+    if (error) return alert('삭제 실패: ' + error.message);
+    await fetchAbyssRecords();
+  };
+  // ================================================
+
+  // ================= ★ 롤링페이퍼 =================
+  const MOODS = ['💌', '😂', '🔥', '🥹', '👍', '🫶', '⭐', '🍀'];
+
+  const fetchPapers = async () => {
+    const { data } = await supabase.from('rolling_papers').select('*').order('created_at', { ascending: false });
+    setPapers(data || []);
+    if (allProfiles.length === 0) fetchAllProfiles();
+  };
+
+  const openPaperModal = (to?: string) => {
+    if (!myProfile) return alert('먼저 프로필을 설정해주세요.');
+    setPTo(to || paperTarget || '');
+    setPMood('💌'); setPTitle(''); setPMsg(''); setPPoint(''); setPAnon(false);
+    setIsPaperModalOpen(true);
+  };
+
+  const handleSavePaper = async () => {
+    if (!pTo) return alert('누구에게 쓸지 골라주세요.');
+    if (!pMsg.trim()) return alert('메시지를 입력해주세요.');
+    const { error } = await supabase.from('rolling_papers').insert([{
+      to_nickname: pTo,
+      author_id: user.id,
+      author_name: pAnon ? '익명' : myProfile.nickname,
+      is_anonymous: pAnon,
+      mood: pMood,
+      title: pTitle.trim() || null,
+      message: pMsg.trim(),
+      point: pPoint.trim() || null,
+    }]);
+    if (error) return alert('저장 실패: ' + error.message);
+    setIsPaperModalOpen(false);
+    await fetchPapers();
+  };
+
+  const handleDeletePaper = async (row: any) => {
+    if (!confirm('이 롤링페이퍼를 삭제할까요?')) return;
+    const { error } = await supabase.from('rolling_papers').delete().eq('id', row.id);
+    if (error) return alert('삭제 실패: ' + error.message);
+    await fetchPapers();
+  };
+
+  // 화면에 보여줄 목록 (받는 사람 필터)
+  const visiblePapers = paperTarget ? papers.filter(p => p.to_nickname === paperTarget) : papers;
+  // 가장 많이 쓴 사람 = 참여왕
+  const paperKing = (() => {
+    const c: { [k: string]: number } = {};
+    papers.forEach(p => { if (!p.is_anonymous) c[p.author_name] = (c[p.author_name] || 0) + 1; });
+    const top = Object.entries(c).sort((a, b) => b[1] - a[1])[0];
+    return top ? top[0] : '-';
+  })();
+  // ================================================
+
   // 순위 변동 표시 (사진처럼 화살표 + 칸수)
   const RankDelta = ({ change, isNew }: { change: number | null; isNew: boolean }) => {
     if (isNew) return <span className="text-[10px] font-bold text-[#0b7fae] bg-[#cfeafa] px-1.5 py-0.5 rounded">NEW</span>;
@@ -676,6 +831,7 @@ export default function RaidScheduler() {
         <nav className="hidden md:flex items-center gap-2 bg-[#eef7fe] p-1.5 rounded-full border border-[#cfe6f5]">
           <TabButton tabName="calendar" label="일정" icon={<Icons.Calendar />} />
           <TabButton tabName="stats" label="순위" icon={<Icons.Chart />} />
+          <TabButton tabName="paper" label="롤링페이퍼" icon={<Icons.Heart />} />
           <TabButton tabName="board" label="팁" icon={<Icons.Board />} />
           {/* ★ 보이스 탭 복구 */}
           <TabButton tabName="voice" label="보이스" icon={<Icons.Mic />} />
@@ -697,13 +853,13 @@ export default function RaidScheduler() {
             <MobileHome />
             {/* 데스크톱에는 홈 탭이 없으므로 캘린더를 보여줍니다 */}
             <div className="hidden md:flex bg-[#ffffff] p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-full flex-col">
-              <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={raids} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
+              <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={calendarEvents} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
             </div>
             <button onClick={openCreateModal} className="fixed bottom-24 right-6 md:bottom-10 md:right-10 bg-[#17a2d9] text-white p-4 rounded-full shadow-lg hover:bg-[#0e8ec0] transition-all z-50 active:scale-95" title="일정 등록"><Icons.Plus /></button>
           </>
         ) : activeTab === 'calendar' ? (
           <div className="bg-[#ffffff] p-4 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-full flex flex-col">
-            <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={raids} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
+            <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={calendarEvents} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
             {/* ★ 1. 플로팅 등록 버튼 (FAB) - 캘린더 탭일 때만 보임 */}
             <button
               onClick={openCreateModal}
@@ -716,14 +872,76 @@ export default function RaidScheduler() {
         ) : activeTab === 'stats' ? (
           // ★ 길드원 순위
           <div className="bg-[#ffffff] p-4 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)]">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
               <h3 className="text-lg md:text-xl font-bold text-[#0f3f57] flex items-center gap-2">🏆 길드원 순위</h3>
               <span className="text-[11px] text-[#6d94ac]">
-                {rankWeek ? `${rankWeek} 기준 · 매주 월요일 갱신` : '아직 집계된 순위가 없습니다'}
+                {rankMode === 'power'
+                  ? (rankWeek ? `${rankWeek} 기준 · 매주 월요일 갱신` : '아직 집계된 순위가 없습니다')
+                  : '기록은 등록 즉시 반영됩니다'}
               </span>
             </div>
 
-            {rankRows.length === 0 ? (
+            <div className="flex items-center gap-2 mb-5">
+              <div className="flex bg-[#e6f2fb] p-1 rounded-xl">
+                <button onClick={() => setRankMode('power')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${rankMode === 'power' ? 'bg-[#ffffff] text-[#0f3f57] shadow-sm' : 'text-[#6d94ac]'}`}>전투력</button>
+                <button onClick={() => setRankMode('abyss')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${rankMode === 'abyss' ? 'bg-[#ffffff] text-[#0f3f57] shadow-sm' : 'text-[#6d94ac]'}`}>어비스 기록</button>
+              </div>
+              {rankMode === 'abyss' && (
+                <button onClick={openRecordModal} className="ml-auto flex items-center gap-1.5 bg-[#17a2d9] text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-[#0e8ec0] shadow-md active:scale-95 transition-all">
+                  <Icons.Plus /> 기록 등록
+                </button>
+              )}
+            </div>
+
+            {rankMode === 'abyss' ? (
+              abyssRows.length === 0 ? (
+                <div className="text-center py-16 text-[#6d94ac]">
+                  <p className="font-bold mb-1">아직 등록된 어비스 기록이 없습니다.</p>
+                  <p className="text-xs text-[#87a9bd]">클리어 시간과 점수를 직접 등록해 보세요.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
+                  <table className="w-full min-w-[560px] border-collapse">
+                    <thead>
+                      <tr className="text-[11px] text-[#5d87a1] border-b border-[#cfe6f5]">
+                        <th className="text-left font-bold py-2.5 pl-1 w-14">순위</th>
+                        <th className="text-left font-bold py-2.5">캐릭터</th>
+                        <th className="text-left font-bold py-2.5 hidden sm:table-cell">던전</th>
+                        <th className="text-center font-bold py-2.5 w-20">클리어</th>
+                        <th className="text-right font-bold py-2.5 w-24">기록 점수</th>
+                        <th className="w-8"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {abyssRows.map(r => {
+                        const isMe = myProfile && r.nickname === myProfile.nickname;
+                        return (
+                          <tr key={r.id} className={`border-b border-[#eef7fe] transition-colors ${isMe ? 'bg-[#e4f4fd]' : 'hover:bg-[#f5fbff]'}`}>
+                            <td className="py-3 pl-1"><RankBadge rank={r.rank} /></td>
+                            <td className="py-3">
+                              <div className="flex items-center gap-2.5">
+                                {renderAvatar(r.game_class, "w-8 h-8")}
+                                <div className="min-w-0">
+                                  <div className={`text-sm font-bold truncate ${isMe ? 'text-[#0b7fae]' : 'text-[#0f3f57]'}`}>{r.nickname}</div>
+                                  <div className="text-[10px] text-[#87a9bd] truncate sm:hidden">{r.dungeon_name}</div>
+                                  {r.memo && <div className="text-[10px] text-[#87a9bd] truncate hidden sm:block">{r.memo}</div>}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 text-xs text-[#4a7d97] hidden sm:table-cell">{r.dungeon_name}</td>
+                            <td className="py-3 text-center text-sm font-bold text-[#265d75] tabular-nums">{fmtTime(r.clear_seconds)}</td>
+                            <td className="py-3 text-right text-sm font-bold text-[#0f3f57] tabular-nums">{(r.score || 0).toLocaleString()}</td>
+                            <td className="py-3 text-right">
+                              {isMe && <button onClick={() => handleDeleteRecord(r)} className="text-[#a7d1e9] hover:text-[#e0526a] p-1 rounded transition-colors"><Icons.Trash /></button>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            ) : rankRows.length === 0 ? (
               <div className="text-center py-16 text-[#6d94ac]">
                 <p className="font-bold mb-1">아직 순위 데이터가 없습니다.</p>
                 <p className="text-xs text-[#87a9bd]">프로필에 인게임 캐릭터명을 등록하면 다음 월요일부터 집계됩니다.</p>
@@ -784,9 +1002,85 @@ export default function RaidScheduler() {
             )}
 
             <p className="text-[11px] text-[#87a9bd] mt-5 leading-relaxed">
-              어비스 · 레이드 횟수는 이번 주(월~일) 일정표에서 참가 버튼을 누른 횟수입니다.
-              순위 변동은 지난주 순위 대비 오르내린 칸수입니다.
+              {rankMode === 'power'
+                ? '어비스 · 레이드 횟수는 이번 주(월~일) 일정표에서 참가 버튼을 누른 횟수입니다. 순위 변동은 지난주 순위 대비 오르내린 칸수입니다.'
+                : '개인 최고 기록만 순위에 반영됩니다. 점수가 같으면 클리어 시간이 빠른 쪽이 위로 올라갑니다.'}
             </p>
+          </div>
+        ) : activeTab === 'paper' ? (
+          // ★ 롤링페이퍼
+          <div className="space-y-4">
+            <div className="bg-[#ffffff] p-5 md:p-6 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)]">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-lg md:text-xl font-bold text-[#0f3f57]">💌 롤링페이퍼</h3>
+                  <p className="text-[11px] text-[#6d94ac] mt-1">추억 하나 + 칭찬 하나 + 응원 한마디. 편하게 남겨주세요.</p>
+                </div>
+                <button onClick={() => openPaperModal()} className="flex items-center gap-1.5 bg-[#17a2d9] text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0e8ec0] shadow-md active:scale-95 transition-all">
+                  <Icons.Plus /> 남기기
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-[#eef7fe] rounded-2xl py-3 text-center border border-[#cfe6f5]">
+                  <div className="text-[10px] text-[#6d94ac] mb-0.5">모인 편지</div>
+                  <div className="text-lg font-extrabold text-[#0f3f57]">{papers.length}</div>
+                </div>
+                <div className="bg-[#eef7fe] rounded-2xl py-3 text-center border border-[#cfe6f5]">
+                  <div className="text-[10px] text-[#6d94ac] mb-0.5">1인당 평균</div>
+                  <div className="text-lg font-extrabold text-[#0f3f57]">
+                    {allProfiles.length > 0 ? (papers.length / allProfiles.length).toFixed(1) : '0'}
+                  </div>
+                </div>
+                <div className="bg-[#fff1f4] rounded-2xl py-3 text-center border border-[#ffd6de]">
+                  <div className="text-[10px] text-[#b32f47] mb-0.5">참여왕</div>
+                  <div className="text-sm font-extrabold text-[#b32f47] truncate px-1">{paperKing}</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <button onClick={() => setPaperTarget('')} className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${paperTarget === '' ? 'bg-[#17a2d9] text-white' : 'bg-[#e6f2fb] text-[#4a7d97]'}`}>전체</button>
+                {allProfiles.map(m => (
+                  <button key={m.id} onClick={() => setPaperTarget(m.nickname)} className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${paperTarget === m.nickname ? 'bg-[#17a2d9] text-white' : 'bg-[#e6f2fb] text-[#4a7d97]'}`}>{m.nickname}</button>
+                ))}
+              </div>
+            </div>
+
+            {visiblePapers.length === 0 ? (
+              <div className="text-center py-16 text-[#6d94ac] bg-[#ffffff] rounded-3xl border border-dashed border-[#b9dcf0]">
+                <p className="font-bold mb-1">아직 남겨진 편지가 없습니다.</p>
+                <p className="text-xs text-[#87a9bd]">첫 편지를 남겨보세요.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {visiblePapers.map(p => (
+                  <div key={p.id} className="bg-[#ffffff] rounded-2xl border border-[#cfe6f5] shadow-[0_4px_16px_rgba(20,110,150,0.07)] overflow-hidden">
+                    <div className="bg-[#fff1f4] px-4 py-2 flex items-center justify-between border-b border-[#ffd6de]">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-base leading-none">{p.mood || '💌'}</span>
+                        <span className="text-xs font-bold text-[#b32f47] truncate">To. {p.to_nickname}</span>
+                      </div>
+                      {p.author_id === user.id && (
+                        <button onClick={() => handleDeletePaper(p)} className="text-[#e8a5b0] hover:text-[#b32f47] p-1 shrink-0"><Icons.Trash /></button>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      {p.title && <div className="text-sm font-extrabold text-[#0f3f57] mb-1.5">{p.title}</div>}
+                      <p className="text-sm text-[#265d75] whitespace-pre-wrap leading-relaxed">{p.message}</p>
+                      {p.point && (
+                        <span className="inline-block mt-3 text-[10px] font-bold bg-[#cfeafa] text-[#06465f] px-2 py-1 rounded-md">🌿 {p.point}</span>
+                      )}
+                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#eef7fe]">
+                        <span className="text-[11px] font-bold text-[#4a7d97]">
+                          From. {p.is_anonymous ? '익명 💗' : p.author_name}
+                        </span>
+                        <span className="text-[10px] text-[#87a9bd]">{(p.created_at || '').split('T')[0]}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : activeTab === 'board' ? (
           // 게시판 탭 (기존과 동일)
@@ -817,6 +1111,7 @@ export default function RaidScheduler() {
         <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'home' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Home /><span className="text-[10px] font-bold">홈</span></button>
         <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'calendar' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Calendar /><span className="text-[10px] font-bold">달력</span></button>
         <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'stats' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Chart /><span className="text-[10px] font-bold">순위</span></button>
+        <button onClick={() => setActiveTab('paper')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'paper' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Heart /><span className="text-[10px] font-bold">롤링</span></button>
         <button onClick={() => setActiveTab('board')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'board' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Board /><span className="text-[10px] font-bold">팁</span></button>
         <button onClick={() => setActiveTab('voice')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'voice' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Mic /><span className="text-[10px] font-bold">보이스</span></button>
         {isAdmin && <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'admin' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Admin /><span className="text-[10px] font-bold">관리</span></button>}
@@ -837,6 +1132,109 @@ export default function RaidScheduler() {
 
       {isWriteModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-6 text-[#0f3f57] flex items-center gap-2"><Icons.Board /> 팁 작성하기</h2><input className="w-full bg-[#eef7fe] p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all font-bold" placeholder="제목을 입력하세요" value={postTitle} onChange={e => setPostTitle(e.target.value)} autoFocus /><textarea className="w-full bg-[#eef7fe] p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all h-40 resize-none" placeholder="내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} /><div className="mb-6"><div className="flex gap-2 mb-2"><div className="flex-1"><input type="file" accept="image/*" id="img-upload" className="hidden" onChange={handleImageSelect} /><label htmlFor="img-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#e6f2fb] rounded-xl cursor-pointer hover:bg-[#d9edf9] transition-all text-xs font-bold border border-dashed border-[#a7d1e9]"><Icons.Camera /> {selectedImage ? '사진 변경' : '사진 첨부'}</label></div><div className="flex-1"><input type="file" id="file-upload" className="hidden" onChange={handleFileSelect} /><label htmlFor="file-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#e6f2fb] rounded-xl cursor-pointer hover:bg-[#d9edf9] transition-all text-xs font-bold border border-dashed border-[#a7d1e9]"><Icons.Clip /> {selectedFile ? '파일 변경' : '파일 첨부'}</label></div></div>{(previewUrl || selectedFile) && (<div className="space-y-2">{previewUrl && (<div className="relative w-full h-32 rounded-xl overflow-hidden border border-[#b9dcf0]"><img src={previewUrl} className="w-full h-full object-cover" alt="미리보기" /><button onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="absolute top-1 right-1 bg-[#0d3c52]/45 text-white rounded-full p-1"><Icons.Close /></button></div>)}{selectedFile && (<div className="flex items-center justify-between bg-[#e4f4fd] p-3 rounded-xl border border-[#cfeafa]"><div className="flex items-center gap-2 overflow-hidden"><Icons.File /><span className="text-xs font-bold text-[#075f84] truncate">{selectedFile.name}</span></div><button onClick={() => setSelectedFile(null)} className="text-[#6d94ac] hover:text-[#e0526a]"><Icons.Close /></button></div>)}</div>)}</div><div className="flex gap-3"><button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9] transition-colors">취소</button><button onClick={handleWritePost} disabled={uploading} className="flex-1 py-4 bg-[#17a2d9] text-white rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all disabled:bg-[#8fb9cf]">{uploading ? '업로드 중...' : '작성완료'}</button></div></div></div>)}
       {isDetailModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden"><div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-[#17a2d9]' : 'bg-[#ff7a8a]'}`}></div><div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-[#87a9bd] hover:text-[#e0526a] p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-[#87a9bd] hover:text-[#0f3f57] p-2 transition-all"><Icons.Close /></button></div><h2 className="text-2xl font-extrabold mb-2 pr-20 text-[#0f3f57] leading-tight">{selectedRaid?.title}</h2><div className="flex items-center gap-2 mb-6 bg-[#eef7fe] p-2 rounded-xl border border-[#cfe6f5] w-fit"><span className="text-xs text-[#6d94ac] font-bold">HOST</span>{selectedRaid?.host_avatar && renderAvatar(selectedRaid.host_avatar, "w-5 h-5")}<span className="text-sm font-bold text-[#265d75]">{selectedRaid?.host_name || '알수없음'}</span></div><div className="bg-[#eef7fe] p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-[#cfe6f5]"><p className="text-xs font-bold text-[#6d94ac] mb-4 uppercase tracking-wider flex items-center justify-between"><span>참가자 현황</span><span className={`px-2 py-1 rounded-full text-xs ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-[#ffe7eb] text-[#e0526a]' : 'bg-[#cfeafa] text-[#0b7fae]'}`}>{participants.length} / {selectedRaid?.max_members || 4}명</span></p><div className="space-y-3">{participants.length === 0 ? <p className="text-[#6d94ac] text-sm text-center py-4">참가자가 없습니다.</p> : null}{participants.map(p => (<div key={p.id} className="flex items-center justify-between bg-[#ffffff] p-3 rounded-2xl border border-[#cfe6f5] shadow-[0_4px_16px_rgba(20,110,150,0.07)]/50"><div className="flex items-center gap-4">{renderAvatar(p.game_class, "w-10 h-10")}<div className="flex flex-col"><span className="font-bold text-sm text-[#0f3f57]">{p.user_name}</span><span className="text-[10px] font-bold text-[#0b7fae] uppercase tracking-wide bg-[#e4f4fd] px-2 py-0.5 rounded-md w-fit mt-0.5">{p.game_class}</span></div></div></div>))}</div></div><div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-[#e6f2fb] text-[#265d75] rounded-2xl font-bold hover:bg-[#d9edf9] text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-[#fff1f4] text-[#e0526a] rounded-2xl font-bold hover:bg-[#ffdde4] text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={participants.length >= (selectedRaid?.max_members || 4)} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-[#8fb9cf] cursor-not-allowed' : 'bg-[#17a2d9] hover:bg-[#0e8ec0] active:scale-95'}`}>{participants.length >= (selectedRaid?.max_members || 4) ? '정원 마감' : '참가하기'}</button>)}</div></div></div>)}
+
+      {/* ★ 어비스 기록 등록 모달 */}
+      {isRecordModalOpen && (
+        <div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[10000] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xl font-bold text-[#0f3f57]">어비스 기록 등록</h2>
+              <button onClick={() => setIsRecordModalOpen(false)} className="text-[#a7d1e9] hover:text-[#0f3f57] p-1"><Icons.Close /></button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-left">
+                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">던전</label>
+                <select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={recDungeon} onChange={e => setRecDungeon(e.target.value)}>
+                  {dungeonList('abyss').map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div className="text-left">
+                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">클리어 시간</label>
+                <div className="flex items-center gap-2">
+                  <input className="flex-1 bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="분" value={recMin} onChange={e => setRecMin(e.target.value)} />
+                  <span className="font-bold text-[#87a9bd]">:</span>
+                  <input className="flex-1 bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="초" value={recSec} onChange={e => setRecSec(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="text-left">
+                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">기록 점수</label>
+                <input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="0" value={recScore} onChange={e => setRecScore(e.target.value)} />
+              </div>
+
+              <div className="text-left">
+                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">메모 (선택)</label>
+                <input className="w-full bg-[#eef7fe] p-4 rounded-2xl text-sm text-center outline-none focus:ring-2 focus:ring-[#17a2d9]" placeholder="파티 구성, 룬 세팅 등" value={recMemo} onChange={e => setRecMemo(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-7">
+              <button onClick={() => setIsRecordModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>
+              <button onClick={handleSaveRecord} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">등록</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ★ 롤링페이퍼 작성 모달 */}
+      {isPaperModalOpen && (
+        <div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[10000] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-[#ffffff] rounded-[2rem] shadow-2xl w-full max-w-sm flex flex-col max-h-[88vh] overflow-hidden">
+            <div className="bg-[#fff1f4] px-6 py-4 flex items-center justify-between border-b border-[#ffd6de]">
+              <h2 className="text-lg font-bold text-[#b32f47]">💌 롤링페이퍼 남기기</h2>
+              <button onClick={() => setIsPaperModalOpen(false)} className="text-[#e8a5b0] hover:text-[#b32f47] p-1"><Icons.Close /></button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <div className="text-left">
+                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">누구에게 💗</label>
+                <select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={pTo} onChange={e => setPTo(e.target.value)}>
+                  <option value="">선택해주세요</option>
+                  {allProfiles.map(m => <option key={m.id} value={m.nickname}>{m.nickname}</option>)}
+                </select>
+              </div>
+
+              <div className="text-left">
+                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">무드 ✨</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {MOODS.map(m => (
+                    <button key={m} onClick={() => setPMood(m)} className={`w-10 h-10 rounded-xl text-lg transition-all ${pMood === m ? 'bg-[#cfeafa] ring-2 ring-[#17a2d9]' : 'bg-[#eef7fe] hover:bg-[#e4f4fd]'}`}>{m}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="text-left">
+                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">한줄 제목 🏷️</label>
+                <input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" placeholder="예) 생생정보통 저리가라급" value={pTitle} onChange={e => setPTitle(e.target.value)} />
+              </div>
+
+              <div className="text-left">
+                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">롤링 메시지 💬</label>
+                <textarea rows={4} className="w-full bg-[#eef7fe] p-4 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#17a2d9] resize-none leading-relaxed" placeholder="추억 하나, 칭찬 하나, 응원 한마디" value={pMsg} onChange={e => setPMsg(e.target.value)} />
+              </div>
+
+              <div className="text-left">
+                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">읽는 맛 포인트 🌿 (선택)</label>
+                <input className="w-full bg-[#eef7fe] p-4 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" placeholder="예) 생생정보통" value={pPoint} onChange={e => setPPoint(e.target.value)} />
+              </div>
+
+              <button onClick={() => setPAnon(!pAnon)} className={`w-full p-3.5 rounded-2xl text-sm font-bold transition-all border ${pAnon ? 'bg-[#fff1f4] border-[#ffd6de] text-[#b32f47]' : 'bg-[#eef7fe] border-[#cfe6f5] text-[#4a7d97]'}`}>
+                {pAnon ? '💗 익명으로 남기기 (켜짐)' : `✍️ ${myProfile?.nickname || ''} 이름으로 남기기`}
+              </button>
+              <p className="text-[10px] text-[#87a9bd] text-center leading-relaxed">
+                드립 치고 싶으면 공개, 진심 쓰고 싶으면 익명이 좋습니다.<br />읽었을 때 기분 좋은 선에서 써주세요.
+              </p>
+            </div>
+
+            <div className="flex gap-3 p-6 pt-0">
+              <button onClick={() => setIsPaperModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>
+              <button onClick={handleSavePaper} className="flex-1 bg-[#ff7a8a] text-white py-4 rounded-2xl font-bold hover:bg-[#e0526a] shadow-lg transition-all">남기기</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ★ 던전 목록 관리 모달 */}
       {isDungeonModalOpen && (
