@@ -59,19 +59,19 @@ export default function StatsPage() {
   if (loading) return <div className="min-h-screen flex items-center justify-center">분석중...</div>;
 
   return (
-    <div className="min-h-screen bg-[#161826] p-4 md:p-10">
+    <div className="min-h-screen  p-4 md:p-10">
       <div className="max-w-4xl mx-auto">
         {/* 헤더 & 뒤로가기 버튼 */}
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-[#e9e9ed]">🏆 길드 레이드 참여 랭킹</h1>
-          <Link href="/" className="px-4 py-2 bg-[#232532] border rounded-xl shadow-sm hover:bg-[#20222f] font-bold text-[#a8aab8] transition-colors">
+          <h1 className="text-3xl font-bold text-[#0f3f57]">🏆 길드 레이드 참여 랭킹</h1>
+          <Link href="/" className="px-4 py-2 bg-[#ffffff] border rounded-xl shadow-sm hover:bg-[#e6f2fb] font-bold text-[#4a7d97] transition-colors">
             ← 달력으로 돌아가기
           </Link>
         </div>
 
         {/* 차트 영역 */}
-        <div className="bg-[#232532] p-6 md:p-10 rounded-[2rem] shadow-xl border border-[#2c2f3d]">
-          <h2 className="text-xl font-bold mb-6 text-[#b5abfc]">참여 횟수 TOP {data.length}</h2>
+        <div className="bg-[#ffffff] p-6 md:p-10 rounded-[2rem] shadow-xl border border-[#cfe6f5]">
+          <h2 className="text-xl font-bold mb-6 text-[#0b7fae]">참여 횟수 TOP {data.length}</h2>
           
           <div className="h-[400px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -101,17 +101,17 @@ export default function StatsPage() {
         {/* 텍스트 리스트로 보기 */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
           {data.map((user, index) => (
-            <div key={user.name} className="bg-[#232532] p-4 rounded-2xl shadow-sm flex items-center justify-between border border-[#2c2f3d]">
+            <div key={user.name} className="bg-[#ffffff] p-4 rounded-2xl shadow-sm flex items-center justify-between border border-[#cfe6f5]">
               <div className="flex items-center gap-3">
-                <span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${index < 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-[#20222f] text-[#9397ab]'}`}>
+                <span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${index < 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-[#e6f2fb] text-[#5d87a1]'}`}>
                   {index + 1}
                 </span>
                 <div>
-                  <div className="font-bold text-[#dcdce3]">{user.name}</div>
-                  <div className="text-xs text-[#8b8fa3]">{user.job}</div>
+                  <div className="font-bold text-[#164a63]">{user.name}</div>
+                  <div className="text-xs text-[#6d94ac]">{user.job}</div>
                 </div>
               </div>
-              <div className="text-[#b5abfc] font-extrabold">{user.count}회</div>
+              <div className="text-[#0b7fae] font-extrabold">{user.count}회</div>
             </div>
           ))}
         </div>
