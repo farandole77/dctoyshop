@@ -94,19 +94,19 @@ function VoiceChatRoom({ user, roomName }: { user: any, roomName: string }) {
 
   if (errorMsg) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-[#eda3a3] gap-4 p-4 text-center">
+      <div className="flex flex-col items-center justify-center h-full text-[#e0526a] gap-4 p-4 text-center">
         <div className="text-3xl">⚠️</div>
         <div className="font-bold">연결 실패</div>
-        <div className="text-sm bg-[#33202b] p-2 rounded text-[#f4bcbc]">{errorMsg}</div>
-        <p className="text-xs text-[#8b8fa3]">관리자에게 문의하세요 (API 키 확인 필요)</p>
+        <div className="text-sm bg-[#fff1f4] p-2 rounded text-[#b32f47]">{errorMsg}</div>
+        <p className="text-xs text-[#6d94ac]">관리자에게 문의하세요 (API 키 확인 필요)</p>
       </div>
     );
   }
 
   if (token === "") {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-[#8b8fa3] gap-2">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#9184d9]"></div>
+      <div className="flex flex-col items-center justify-center h-full text-[#6d94ac] gap-2">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#17a2d9]"></div>
         <span>입장권 확인 중...</span>
       </div>
     );
@@ -121,7 +121,7 @@ function VoiceChatRoom({ user, roomName }: { user: any, roomName: string }) {
       data-lk-theme="default"
       style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
     >
-      <div className="flex-1 p-4 overflow-y-auto bg-[#12131d] rounded-t-3xl">
+      <div className="flex-1 p-4 overflow-y-auto bg-[#0d3c52] rounded-t-3xl">
         <MyVideoConference />
       </div>
       <ControlBar /> 
@@ -239,7 +239,7 @@ export default function RaidScheduler() {
   const handleSaveProfile = async () => { if (!newNickname) return alert("입력해주세요!"); const newProfile = { id: user.id, nickname: newNickname, game_class: newClass }; const { error } = await supabase.from('profiles').upsert([newProfile]); if (!error) { setMyProfile(newProfile); setIsProfileModalOpen(false); } };
   const openEditProfile = () => { if (myProfile) { setNewNickname(myProfile.nickname); setNewClass(myProfile.game_class); } setIsProfileModalOpen(true); };
   
-  const fetchRaids = async () => { const { data } = await supabase.from('raids').select('*'); if (data) { setRaids(data.map((raid) => ({ id: raid.id, title: raid.title, date: raid.start_time.split('T')[0], created_by_email: raid.created_by_email, host_name: raid.host_name, host_avatar: raid.host_avatar, max_members: raid.max_members, backgroundColor: raid.title.includes('어비스') || raid.title.includes('지옥') ? '#4a3f7d' : '#6d3a46', borderColor: 'transparent' }))); } };
+  const fetchRaids = async () => { const { data } = await supabase.from('raids').select('*'); if (data) { setRaids(data.map((raid) => ({ id: raid.id, title: raid.title, date: raid.start_time.split('T')[0], created_by_email: raid.created_by_email, host_name: raid.host_name, host_avatar: raid.host_avatar, max_members: raid.max_members, backgroundColor: raid.title.includes('어비스') || raid.title.includes('지옥') ? '#bfe6f7' : '#ffd3da', borderColor: 'transparent' }))); } };
   const fetchStats = async () => { const { data: participants } = await supabase.from('participants').select('user_name, game_class, raids (title)'); if (participants) { const countMap: { [key: string]: { count: number; job: string } } = {}; participants.forEach((p: any) => { const raidTitle = p.raids?.title || ""; if (statsFilter === 'abyss' && !raidTitle.includes('어비스') && !raidTitle.includes('지옥')) return; if (statsFilter === 'raid' && !raidTitle.includes('레이드')) return; if (countMap[p.user_name]) countMap[p.user_name].count += 1; else countMap[p.user_name] = { count: 1, job: p.game_class || '모험가' }; }); const chartData = Object.keys(countMap).map((name) => ({ name: name, count: countMap[name].count, job: countMap[name].job })).sort((a, b) => b.count - a.count); setStatsData(chartData); } };
   const fetchPosts = async () => { const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false }); if (data) setPosts(data); };
 
@@ -381,11 +381,11 @@ export default function RaidScheduler() {
   const handleLeave = async () => { const isHost = selectedRaid.created_by_email === user.email; if (isHost && participants.length <= 1) { if (!confirm("파티가 해체됩니다. 삭제하시겠습니까?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); } else { if (!confirm("취소?")) return; await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email); refreshParticipants(selectedRaid.id); } };
   const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
   const refreshParticipants = async (raidId: any) => { const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setParticipants(data || []); await fetchRaidCounts(); };
-  const renderAvatar = (gameClass: string, size = "w-10 h-10") => { let imagePath = CLASS_IMAGES[gameClass] || "/class-icons/default.png"; return <img src={imagePath} className={`${size} rounded-full object-cover border border-[#343848] bg-[#232532]`} alt={gameClass} onError={(e) => { (e.target as HTMLImageElement).src = "/class-icons/default.png"; }} />; };
-  const handleAddToCalendar = () => { if (!selectedRaid) return; const title = encodeURIComponent(`[길드] ${selectedRaid.title}`); const details = encodeURIComponent("Star guild 일정"); const dateStr = selectedRaid.date.replace(/-/g, ""); const dates = `${dateStr}/${dateStr}`; const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`; window.open(url, '_blank'); };
+  const renderAvatar = (gameClass: string, size = "w-10 h-10") => { let imagePath = CLASS_IMAGES[gameClass] || "/class-icons/default.png"; return <img src={imagePath} className={`${size} rounded-full object-cover border border-[#b9dcf0] bg-[#ffffff]`} alt={gameClass} onError={(e) => { (e.target as HTMLImageElement).src = "/class-icons/default.png"; }} />; };
+  const handleAddToCalendar = () => { if (!selectedRaid) return; const title = encodeURIComponent(`[길드] ${selectedRaid.title}`); const details = encodeURIComponent("환생 일정"); const dateStr = selectedRaid.date.replace(/-/g, ""); const dates = `${dateStr}/${dateStr}`; const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`; window.open(url, '_blank'); };
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-[#161826] text-xl font-bold text-[#8b8fa3]">로딩중...</div>;
-  if (!user) return <div className="min-h-screen flex flex-col justify-center items-center bg-[#161826] p-4"><div className="bg-[#232532] p-10 rounded-[2rem] border border-[#2c2f3d] text-center max-w-sm w-full relative overflow-hidden"><div className="absolute -top-24 -left-16 w-72 h-72 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(145,132,217,.18), transparent 65%)" }} /><div className="relative"><h1 className="text-3xl font-extrabold mb-8 text-[#dcdce3]">Star guild</h1><button onClick={handleLogin} className="w-full bg-transparent border border-[#9184d9] p-4 rounded-2xl font-bold flex justify-center items-center gap-3 hover:bg-[#9184d9]/12 active:bg-[#9184d9]/22 transition-all text-[#b5abfc]"><span className="text-2xl">G</span> <span>구글 아이디로 시작</span></button><p className="text-[11px] text-[#75798c] mt-4">길드원만 가입할 수 있습니다</p></div></div></div>;
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center text-xl font-bold text-[#6d94ac]">로딩중...</div>;
+  if (!user) return <div className="min-h-screen flex flex-col justify-center items-center p-4"><div className="bg-[#ffffff] p-10 rounded-[2rem] border border-[#cfe6f5] text-center max-w-sm w-full relative overflow-hidden"><div className="absolute -top-24 -left-16 w-72 h-72 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(23,162,217,.22), transparent 65%)" }} /><div className="relative"><h1 className="text-3xl font-extrabold mb-8 text-[#164a63]">환생</h1><button onClick={handleLogin} className="w-full bg-transparent border border-[#17a2d9] p-4 rounded-2xl font-bold flex justify-center items-center gap-3 hover:bg-[#17a2d9]/12 active:bg-[#17a2d9]/22 transition-all text-[#0b7fae]"><span className="text-2xl">G</span> <span>구글 아이디로 시작</span></button><p className="text-[11px] text-[#87a9bd] mt-4">길드원만 가입할 수 있습니다</p></div></div></div>;
 
   const isJoined = participants.some(p => p.user_email === user.email);
   const isMyRaid = isAdmin || (selectedRaid?.created_by_email === user.email);
@@ -423,24 +423,24 @@ export default function RaidScheduler() {
     return (
       <button
         onClick={() => openRaidDetail(raid)}
-        className="w-full bg-[#232532] border border-[#2c2f3d] rounded-2xl p-3 flex items-center gap-3 text-left active:scale-[0.99] transition-all"
+        className="w-full bg-[#ffffff] border border-[#cfe6f5] rounded-2xl p-3 flex items-center gap-3 text-left active:scale-[0.99] transition-all"
       >
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${abyss ? 'bg-[#2b2741] text-[#b5abfc]' : 'bg-[#33202b] text-[#eda3a3]'}`}>
+        <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${abyss ? 'bg-[#e4f4fd] text-[#0b7fae]' : 'bg-[#fff1f4] text-[#e0526a]'}`}>
           {abyss ? <Icons.Calendar /> : <Icons.Chart />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`text-[11px] px-2 py-0.5 rounded-md ${abyss ? 'bg-[#423a6a] text-[#f5f4ff]' : 'bg-[#4d2b36] text-[#f4bcbc]'}`}>
+            <span className={`text-[11px] px-2 py-0.5 rounded-md ${abyss ? 'bg-[#cfeafa] text-[#06465f]' : 'bg-[#ffd6de] text-[#b32f47]'}`}>
               {abyss ? '어비스' : '레이드'}
             </span>
-            <span className="text-[11px] text-[#8b8fa3]">{whenLabel(raid.date)}</span>
+            <span className="text-[11px] text-[#6d94ac]">{whenLabel(raid.date)}</span>
           </div>
           <div className="text-sm truncate">{raid.title}</div>
-          <div className="text-[11px] text-[#8b8fa3] mt-0.5">파티장 {raid.host_name || '알수없음'}</div>
+          <div className="text-[11px] text-[#6d94ac] mt-0.5">파티장 {raid.host_name || '알수없음'}</div>
         </div>
         <div className="text-right shrink-0">
-          <div className={`text-[15px] ${filled >= max ? 'text-[#eda3a3]' : 'text-[#b5abfc]'}`}>{filled}/{max}</div>
-          <div className="text-[10px] text-[#75798c]">{filled >= max ? '마감' : '모집중'}</div>
+          <div className={`text-[15px] ${filled >= max ? 'text-[#e0526a]' : 'text-[#0b7fae]'}`}>{filled}/{max}</div>
+          <div className="text-[10px] text-[#87a9bd]">{filled >= max ? '마감' : '모집중'}</div>
         </div>
       </button>
     );
@@ -449,29 +449,29 @@ export default function RaidScheduler() {
   const MobileHome = () => (
     <div className="md:hidden">
       <div className="mb-5">
-        <div className="text-[10px] tracking-[0.1em] uppercase text-[#9184d9]">알리사 · Star guild</div>
+        <div className="text-[10px] tracking-[0.1em] uppercase text-[#17a2d9]">알리사 서버 · 환생</div>
         <h2 className="text-[26px] mt-1 leading-tight">오늘 어디 가지?</h2>
       </div>
 
       {nextRaid ? (
-        <div className="bg-[#232532] border border-[#2c2f3d] rounded-2xl p-4 relative overflow-hidden mb-6">
-          <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(135deg, rgba(145,132,217,.16), transparent 60%)' }} />
+        <div className="bg-[#ffffff] border border-[#cfe6f5] rounded-2xl p-4 relative overflow-hidden mb-6">
+          <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(135deg, rgba(23,162,217,.18), transparent 60%)' }} />
           <div className="relative">
             <div className="flex items-center justify-between mb-2.5">
-              <span className={`text-[11px] px-2.5 py-0.5 rounded-md ${isAbyss(nextRaid.title) ? 'bg-[#423a6a] text-[#f5f4ff]' : 'bg-[#4d2b36] text-[#f4bcbc]'}`}>
+              <span className={`text-[11px] px-2.5 py-0.5 rounded-md ${isAbyss(nextRaid.title) ? 'bg-[#cfeafa] text-[#06465f]' : 'bg-[#ffd6de] text-[#b32f47]'}`}>
                 {isAbyss(nextRaid.title) ? '어비스' : '레이드'}
               </span>
-              <span className="text-[11px] text-[#b5abfc] tracking-wide">{dDayLabel(nextRaid.date)}</span>
+              <span className="text-[11px] text-[#0b7fae] tracking-wide">{dDayLabel(nextRaid.date)}</span>
             </div>
             <h3 className="text-[21px] leading-tight mb-1">{nextRaid.title}</h3>
-            <div className="text-[12px] text-[#8b8fa3] mb-3.5">
+            <div className="text-[12px] text-[#6d94ac] mb-3.5">
               {whenLabel(nextRaid.date)} · 파티장 {nextRaid.host_name || '알수없음'}
             </div>
             <div className="flex items-center gap-1.5 mb-3.5">
               {Array.from({ length: nextRaid.max_members || 4 }).map((_, i) => {
                 const taken = i < (raidCounts[nextRaid.id] || 0);
                 return (
-                  <div key={i} className={`flex-1 h-9 rounded-lg flex items-center justify-center text-[10px] ${taken ? 'bg-[#2b2741] text-[#b5abfc] ring-1 ring-inset ring-[#423a6a]' : 'ring-1 ring-inset ring-[#2c2f3d] text-[#75798c]'}`}>
+                  <div key={i} className={`flex-1 h-9 rounded-lg flex items-center justify-center text-[10px] ${taken ? 'bg-[#e4f4fd] text-[#0b7fae] ring-1 ring-inset ring-[#cfeafa]' : 'ring-1 ring-inset ring-[#cfe6f5] text-[#87a9bd]'}`}>
                     {taken ? '참가' : '빈자리'}
                   </div>
                 );
@@ -479,17 +479,17 @@ export default function RaidScheduler() {
             </div>
             <button
               onClick={() => openRaidDetail(nextRaid)}
-              className="w-full min-h-[42px] rounded-xl border border-[#9184d9] text-[#b5abfc] active:bg-[#9184d9]/20 transition-all"
+              className="w-full min-h-[42px] rounded-xl border border-[#17a2d9] text-[#0b7fae] active:bg-[#17a2d9]/20 transition-all"
             >
               상세 · 참가
             </button>
           </div>
         </div>
       ) : (
-        <div className="bg-[#232532] border border-dashed border-[#343848] rounded-2xl p-8 text-center mb-6">
-          <p className="text-sm text-[#9397ab] mb-1">예정된 일정이 없습니다.</p>
-          <p className="text-[11px] text-[#75798c] mb-4">첫 파티를 열어보세요.</p>
-          <button onClick={openCreateModal} className="px-5 py-2.5 rounded-xl border border-[#9184d9] text-[#b5abfc] text-sm">
+        <div className="bg-[#ffffff] border border-dashed border-[#b9dcf0] rounded-2xl p-8 text-center mb-6">
+          <p className="text-sm text-[#5d87a1] mb-1">예정된 일정이 없습니다.</p>
+          <p className="text-[11px] text-[#87a9bd] mb-4">첫 파티를 열어보세요.</p>
+          <button onClick={openCreateModal} className="px-5 py-2.5 rounded-xl border border-[#17a2d9] text-[#0b7fae] text-sm">
             일정 등록
           </button>
         </div>
@@ -497,17 +497,17 @@ export default function RaidScheduler() {
 
       <div className="flex items-baseline justify-between mb-2.5">
         <h4 className="text-[16px]">다가오는 일정</h4>
-        <span className="text-[11px] text-[#8b8fa3]">{upcomingRaids.length}개</span>
+        <span className="text-[11px] text-[#6d94ac]">{upcomingRaids.length}개</span>
       </div>
       <div className="flex flex-col gap-2">
         {upcomingRaids.slice(0, 12).map(raid => <PartyRow key={raid.id} raid={raid} />)}
         {upcomingRaids.length === 0 && (
-          <p className="text-[12px] text-[#75798c] py-6 text-center">표시할 일정이 없습니다.</p>
+          <p className="text-[12px] text-[#87a9bd] py-6 text-center">표시할 일정이 없습니다.</p>
         )}
       </div>
 
-      <div className="h-px my-5" style={{ background: 'linear-gradient(to right, transparent, rgba(233,233,237,.16) 40px, rgba(233,233,237,.16) calc(100% - 40px), transparent)' }} />
-      <button onClick={() => setActiveTab('calendar')} className="w-full text-[12px] text-[#8b8fa3] py-2">
+      <div className="h-px my-5" style={{ background: 'linear-gradient(to right, transparent, rgba(13,60,82,.14) 40px, rgba(13,60,82,.14) calc(100% - 40px), transparent)' }} />
+      <button onClick={() => setActiveTab('calendar')} className="w-full text-[12px] text-[#6d94ac] py-2">
         달력으로 보기 →
       </button>
     </div>
@@ -515,22 +515,22 @@ export default function RaidScheduler() {
   // ====================================================
 
   const TabButton = ({ tabName, label, icon }: { tabName: string, label: string, icon: any }) => (
-    <button onClick={() => setActiveTab(tabName as any)} className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold transition-all duration-200 text-sm md:text-base ${activeTab === tabName ? 'bg-[#9184d9] text-[#161826] shadow-md transform scale-105' : 'text-[#9397ab] hover:bg-[#272a38] hover:text-[#e9e9ed]'}`}>
+    <button onClick={() => setActiveTab(tabName as any)} className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold transition-all duration-200 text-sm md:text-base ${activeTab === tabName ? 'bg-[#17a2d9] text-white shadow-md transform scale-105' : 'text-[#5d87a1] hover:bg-[#e6f2fb] hover:text-[#0f3f57]'}`}>
       {icon}<span>{label}</span>
     </button>
   );
 
   return (
-    <div className="flex flex-col h-screen bg-[#161826] text-[#e9e9ed] overflow-hidden">
+    <div className="flex flex-col h-screen text-[#0f3f57] overflow-hidden">
       {/* 헤더 */}
-      <header className="h-16 md:h-20 bg-[#161826]/85 backdrop-blur-xl border-b border-[#2c2f3d] flex items-center justify-between px-4 md:px-10 shrink-0 z-30 shadow-sm relative">
+      <header className="h-16 md:h-20 bg-white/72 backdrop-blur-xl border-b border-[#cfe6f5] flex items-center justify-between px-4 md:px-10 shrink-0 z-30 shadow-sm relative">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-[#9184d9] rounded-xl flex items-center justify-center text-[#161826] shadow-lg transform rotate-3 hover:rotate-0 transition-all cursor-pointer p-1">
-            <Image src="/icon.png" alt="로고" width={32} height={32} className="w-full h-full object-contain rounded-lg" />
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer hover:scale-105 drop-shadow-[0_2px_6px_rgba(20,110,150,0.28)]">
+            <Image src="/icon.png" alt="환생 길드 로고" width={40} height={40} className="w-full h-full object-contain" />
           </div>
-          <span className="font-extrabold text-lg md:text-xl tracking-tight text-[#e9e9ed]">Star guild</span>
+          <span className="font-extrabold text-lg md:text-xl tracking-tight text-[#0f3f57]">환생</span>
         </div>
-        <nav className="hidden md:flex items-center gap-2 bg-[#1c1e2b] p-1.5 rounded-full border border-[#2c2f3d]">
+        <nav className="hidden md:flex items-center gap-2 bg-[#eef7fe] p-1.5 rounded-full border border-[#cfe6f5]">
           <TabButton tabName="calendar" label="일정" icon={<Icons.Calendar />} />
           <TabButton tabName="stats" label="통계" icon={<Icons.Chart />} />
           <TabButton tabName="board" label="팁" icon={<Icons.Board />} />
@@ -540,11 +540,11 @@ export default function RaidScheduler() {
         </nav>
         <div className="flex items-center gap-2 md:gap-4">
           <div className="flex flex-col items-end cursor-pointer group" onClick={openEditProfile}>
-            <div className="text-sm font-bold text-[#dcdce3] flex items-center gap-1"><span className="hidden md:inline">{myProfile ? myProfile.nickname : '설정필요'}</span><span className="md:hidden">{myProfile ? myProfile.nickname.slice(0,4)+'..' : '설정'}</span></div>
-            <div className="text-xs text-[#9397ab] font-medium hidden md:block">{myProfile ? myProfile.game_class : ''}</div>
+            <div className="text-sm font-bold text-[#164a63] flex items-center gap-1"><span className="hidden md:inline">{myProfile ? myProfile.nickname : '설정필요'}</span><span className="md:hidden">{myProfile ? myProfile.nickname.slice(0,4)+'..' : '설정'}</span></div>
+            <div className="text-xs text-[#5d87a1] font-medium hidden md:block">{myProfile ? myProfile.game_class : ''}</div>
           </div>
-          <div className="relative group cursor-pointer" onClick={openEditProfile}>{myProfile ? renderAvatar(myProfile.game_class, "w-9 h-9 md:w-10 md:h-10") : <div className="w-9 h-9 bg-[#2c2f3d] rounded-full"/>}</div>
-          <button onClick={handleLogout} className="p-2 text-[#8b8fa3] hover:text-[#f0a3a3] hover:bg-[#3a2430] rounded-full transition-all" title="로그아웃"><Icons.Logout /></button>
+          <div className="relative group cursor-pointer" onClick={openEditProfile}>{myProfile ? renderAvatar(myProfile.game_class, "w-9 h-9 md:w-10 md:h-10") : <div className="w-9 h-9 bg-[#cfe6f5] rounded-full"/>}</div>
+          <button onClick={handleLogout} className="p-2 text-[#6d94ac] hover:text-[#e0526a] hover:bg-[#ffe7eb] rounded-full transition-all" title="로그아웃"><Icons.Logout /></button>
         </div>
       </header>
 
@@ -553,18 +553,18 @@ export default function RaidScheduler() {
           <>
             <MobileHome />
             {/* 데스크톱에는 홈 탭이 없으므로 캘린더를 보여줍니다 */}
-            <div className="hidden md:flex bg-[#232532] p-8 rounded-3xl border border-[#2c2f3d] h-full flex-col">
+            <div className="hidden md:flex bg-[#ffffff] p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-full flex-col">
               <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={raids} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
             </div>
-            <button onClick={openCreateModal} className="fixed bottom-24 right-6 md:bottom-10 md:right-10 bg-[#9184d9] text-[#161826] p-4 rounded-full shadow-lg hover:bg-[#a396e4] transition-all z-50 active:scale-95" title="일정 등록"><Icons.Plus /></button>
+            <button onClick={openCreateModal} className="fixed bottom-24 right-6 md:bottom-10 md:right-10 bg-[#17a2d9] text-white p-4 rounded-full shadow-lg hover:bg-[#0e8ec0] transition-all z-50 active:scale-95" title="일정 등록"><Icons.Plus /></button>
           </>
         ) : activeTab === 'calendar' ? (
-          <div className="bg-[#232532] p-4 md:p-8 rounded-3xl border border-[#2c2f3d] h-full flex flex-col">
+          <div className="bg-[#ffffff] p-4 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-full flex flex-col">
             <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={raids} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
             {/* ★ 1. 플로팅 등록 버튼 (FAB) - 캘린더 탭일 때만 보임 */}
             <button
               onClick={openCreateModal}
-              className="fixed bottom-24 right-6 md:bottom-10 md:right-10 bg-[#9184d9] text-[#161826] p-4 rounded-full shadow-lg hover:bg-[#a396e4] transition-all z-50 hover:scale-110 active:scale-95"
+              className="fixed bottom-24 right-6 md:bottom-10 md:right-10 bg-[#17a2d9] text-white p-4 rounded-full shadow-lg hover:bg-[#0e8ec0] transition-all z-50 hover:scale-110 active:scale-95"
               title="일정 등록"
             >
               <Icons.Plus />
@@ -573,100 +573,100 @@ export default function RaidScheduler() {
         ) : activeTab === 'stats' ? (
           // 통계 탭 (기존과 동일)
           <div className="space-y-6">
-            <div className="bg-[#232532] p-6 md:p-8 rounded-3xl border border-[#2c2f3d] h-[500px]"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-[#dcdce3] flex items-center gap-2"><Icons.Chart /> 참여 랭킹</h3><div className="flex bg-[#20222f] p-1 rounded-xl"><button onClick={() => setStatsFilter('all')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'all' ? 'bg-[#232532] text-[#e9e9ed] shadow-sm' : 'text-[#8b8fa3] hover:text-[#cfd3e5]'}`}>전체</button><button onClick={() => setStatsFilter('abyss')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'abyss' ? 'bg-[#232532] text-[#e9e9ed] shadow-sm' : 'text-[#8b8fa3] hover:text-[#cfd3e5]'}`}>어비스</button><button onClick={() => setStatsFilter('raid')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'raid' ? 'bg-[#232532] text-[#e9e9ed] shadow-sm' : 'text-[#8b8fa3] hover:text-[#cfd3e5]'}`}>레이드</button></div></div><ResponsiveContainer width="100%" height="90%"><BarChart data={statsData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#2c2f3d" /><XAxis type="number" hide /><YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 14, fontWeight: 'bold', fill: '#b2b6ca' }} /><Tooltip cursor={{ fill: '#ffffff0d' }} contentStyle={{ borderRadius: '12px', border: '1px solid #3f424d', background: '#232532', color: '#e9e9ed', boxShadow: '0 16px 40px rgba(0,0,0,0.65)' }} /><Bar dataKey="count" barSize={30} radius={[0, 10, 10, 0]}>{statsData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.name === myProfile?.nickname ? '#9184d9' : '#3f424d'} />))}</Bar></BarChart></ResponsiveContainer></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{statsData.map((user, index) => (<div key={user.name} className={`bg-[#232532] p-5 rounded-2xl flex items-center justify-between shadow-sm border ${user.name === myProfile?.nickname ? 'border-[#9184d9] ring-1 ring-[#9184d9] bg-[#2b2741]' : 'border-[#2c2f3d]'}`}><div className="flex items-center gap-4"><span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${index < 3 ? 'bg-[#9184d9] text-[#161826]' : 'bg-[#20222f] text-[#9397ab]'}`}>{index + 1}</span><div><div className="font-bold text-[#e9e9ed]">{user.name}</div><div className="text-xs text-[#9397ab] font-medium">{user.job}</div></div></div><div className={`font-extrabold text-lg ${user.name === myProfile?.nickname ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}>{user.count}회</div></div>))}</div>
+            <div className="bg-[#ffffff] p-6 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-[500px]"><div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-[#164a63] flex items-center gap-2"><Icons.Chart /> 참여 랭킹</h3><div className="flex bg-[#e6f2fb] p-1 rounded-xl"><button onClick={() => setStatsFilter('all')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'all' ? 'bg-[#ffffff] text-[#0f3f57] shadow-sm' : 'text-[#6d94ac] hover:text-[#cfd3e5]'}`}>전체</button><button onClick={() => setStatsFilter('abyss')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'abyss' ? 'bg-[#ffffff] text-[#0f3f57] shadow-sm' : 'text-[#6d94ac] hover:text-[#cfd3e5]'}`}>어비스</button><button onClick={() => setStatsFilter('raid')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${statsFilter === 'raid' ? 'bg-[#ffffff] text-[#0f3f57] shadow-sm' : 'text-[#6d94ac] hover:text-[#cfd3e5]'}`}>레이드</button></div></div><ResponsiveContainer width="100%" height="90%"><BarChart data={statsData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#cfe6f5" /><XAxis type="number" hide /><YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 14, fontWeight: 'bold', fill: '#4a7d97' }} /><Tooltip cursor={{ fill: '#eef7fe' }} contentStyle={{ borderRadius: '12px', border: '1px solid #a7d1e9', background: '#ffffff', color: '#0f3f57', boxShadow: '0 12px 32px rgba(20,110,150,0.18)' }} /><Bar dataKey="count" barSize={30} radius={[0, 10, 10, 0]}>{statsData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.name === myProfile?.nickname ? '#17a2d9' : '#a7d1e9'} />))}</Bar></BarChart></ResponsiveContainer></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{statsData.map((user, index) => (<div key={user.name} className={`bg-[#ffffff] p-5 rounded-2xl flex items-center justify-between shadow-sm border ${user.name === myProfile?.nickname ? 'border-[#17a2d9] ring-1 ring-[#17a2d9] bg-[#e4f4fd]' : 'border-[#cfe6f5]'}`}><div className="flex items-center gap-4"><span className={`w-8 h-8 flex items-center justify-center rounded-full font-bold text-sm ${index < 3 ? 'bg-[#17a2d9] text-white' : 'bg-[#e6f2fb] text-[#5d87a1]'}`}>{index + 1}</span><div><div className="font-bold text-[#0f3f57]">{user.name}</div><div className="text-xs text-[#5d87a1] font-medium">{user.job}</div></div></div><div className={`font-extrabold text-lg ${user.name === myProfile?.nickname ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}>{user.count}회</div></div>))}</div>
           </div>
         ) : activeTab === 'board' ? (
           // 게시판 탭 (기존과 동일)
           <div className="relative min-h-full pb-20">
-            <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-[#dcdce3]">💡 꿀팁 공유 게시판</h3><button onClick={() => setIsWriteModalOpen(true)} className="flex items-center gap-2 bg-[#9184d9] text-[#161826] px-5 py-2.5 rounded-xl font-bold hover:bg-[#a396e4] transition-all shadow-md active:scale-95"><Icons.Plus /> <span className="hidden md:inline">팁 작성하기</span><span className="md:hidden">글쓰기</span></button></div>
-            <div className="grid grid-cols-1 gap-4">{posts.length === 0 ? <div className="text-center text-[#8b8fa3] py-20 bg-[#232532] rounded-3xl border border-[#2c2f3d]">아직 작성된 팁이 없습니다.</div> : null}{posts.map(post => (<div key={post.id} className="bg-[#232532] p-6 rounded-3xl border border-[#2c2f3d] hover:border-[#423a6a] hover:shadow-md transition-all group"><div className="flex justify-between items-start mb-3"><h3 className="text-lg font-bold text-[#e9e9ed]">{post.title}</h3>{(isAdmin || post.user_id === user.id) && (<button onClick={() => handleDeletePost(post.id)} className="text-[#75798c] hover:text-[#f0a3a3] p-2 rounded-full hover:bg-[#3a2430] transition-all"><Icons.Trash /></button>)}</div><p className="text-[#a8aab8] text-sm whitespace-pre-wrap mb-5 leading-relaxed">{post.content}</p>
-            {post.image_url && (<div className="mb-4 rounded-xl overflow-hidden border border-[#2c2f3d] cursor-pointer relative group/img" onClick={() => setViewImage(post.image_url)}><img src={post.image_url} alt="첨부 이미지" className="w-full object-cover max-h-80 transition-transform group-hover/img:scale-105" /><div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover/img:opacity-100"><span className="text-white bg-black/50 px-3 py-1 rounded-full text-xs backdrop-blur-sm">클릭해서 확대</span></div></div>)}
+            <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-[#164a63]">💡 꿀팁 공유 게시판</h3><button onClick={() => setIsWriteModalOpen(true)} className="flex items-center gap-2 bg-[#17a2d9] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#0e8ec0] transition-all shadow-md active:scale-95"><Icons.Plus /> <span className="hidden md:inline">팁 작성하기</span><span className="md:hidden">글쓰기</span></button></div>
+            <div className="grid grid-cols-1 gap-4">{posts.length === 0 ? <div className="text-center text-[#6d94ac] py-20 bg-[#ffffff] rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)]">아직 작성된 팁이 없습니다.</div> : null}{posts.map(post => (<div key={post.id} className="bg-[#ffffff] p-6 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] hover:border-[#cfeafa] hover:shadow-md transition-all group"><div className="flex justify-between items-start mb-3"><h3 className="text-lg font-bold text-[#0f3f57]">{post.title}</h3>{(isAdmin || post.user_id === user.id) && (<button onClick={() => handleDeletePost(post.id)} className="text-[#87a9bd] hover:text-[#e0526a] p-2 rounded-full hover:bg-[#ffe7eb] transition-all"><Icons.Trash /></button>)}</div><p className="text-[#4a7d97] text-sm whitespace-pre-wrap mb-5 leading-relaxed">{post.content}</p>
+            {post.image_url && (<div className="mb-4 rounded-xl overflow-hidden border border-[#cfe6f5] cursor-pointer relative group/img" onClick={() => setViewImage(post.image_url)}><img src={post.image_url} alt="첨부 이미지" className="w-full object-cover max-h-80 transition-transform group-hover/img:scale-105" /><div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover/img:opacity-100"><span className="text-white bg-[#0d3c52]/45 px-3 py-1 rounded-full text-xs backdrop-blur-sm">클릭해서 확대</span></div></div>)}
             {post.file_url && (
-              <a href={post.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 mb-4 bg-[#1c1e2b] rounded-xl border border-[#343848] hover:bg-[#2b2741] hover:border-[#423a6a] transition-colors group/file">
-                <div className="bg-[#232532] p-2 rounded-lg text-[#b5abfc] shadow-sm"><Icons.File /></div>
-                <div className="flex-1 overflow-hidden"><div className="text-sm font-bold text-[#c9cad3] truncate group-hover/file:text-[#d2cefd]">{post.file_name || '첨부파일'}</div><div className="text-xs text-[#8b8fa3]">클릭하여 다운로드</div></div><div className="text-[#8b8fa3] group-hover/file:text-[#b5abfc]"><Icons.Download /></div>
+              <a href={post.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 mb-4 bg-[#eef7fe] rounded-xl border border-[#b9dcf0] hover:bg-[#e4f4fd] hover:border-[#cfeafa] transition-colors group/file">
+                <div className="bg-[#ffffff] p-2 rounded-lg text-[#0b7fae] shadow-sm"><Icons.File /></div>
+                <div className="flex-1 overflow-hidden"><div className="text-sm font-bold text-[#265d75] truncate group-hover/file:text-[#075f84]">{post.file_name || '첨부파일'}</div><div className="text-xs text-[#6d94ac]">클릭하여 다운로드</div></div><div className="text-[#6d94ac] group-hover/file:text-[#0b7fae]"><Icons.Download /></div>
               </a>
             )}
-            <div className="flex items-center gap-3 pt-4 border-t border-[#262936]">{renderAvatar(post.author_class, "w-8 h-8")}<div><span className="block text-xs font-bold text-[#c9cad3]">{post.author_name}</span><span className="block text-[10px] text-[#8b8fa3]">{post.author_class} · {post.created_at.split('T')[0]}</span></div></div></div>))}</div>
+            <div className="flex items-center gap-3 pt-4 border-t border-[#dcefFA]">{renderAvatar(post.author_class, "w-8 h-8")}<div><span className="block text-xs font-bold text-[#265d75]">{post.author_name}</span><span className="block text-[10px] text-[#6d94ac]">{post.author_class} · {post.created_at.split('T')[0]}</span></div></div></div>))}</div>
           </div>
         ) : activeTab === 'voice' ? (
           // 보이스 탭 (기존과 동일)
-          <div className="h-full bg-[#232532] rounded-3xl border border-[#2c2f3d] overflow-hidden">
+          <div className="h-full bg-[#ffffff] rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] overflow-hidden">
             <VoiceChatRoom user={user} roomName={voiceRoomName} />
           </div>
         ) : (
           // 관리자 탭 (기존과 동일)
-          <div className="bg-[#232532] p-6 md:p-8 rounded-3xl border border-[#2c2f3d] h-full"><div className="flex items-center justify-between mb-6"><h3 className="text-xl font-bold text-[#e9e9ed] flex items-center gap-2"><Icons.Admin /> 회원 관리</h3><button onClick={openDungeonModal} className="flex items-center gap-2 bg-[#9184d9] text-[#161826] px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-[#a396e4] transition-all shadow-md active:scale-95"><Icons.Edit /> 던전 목록 관리</button></div><div className="space-y-4">{allProfiles.map(member => (<div key={member.id} className="flex items-center justify-between bg-[#1c1e2b] p-4 rounded-2xl border border-[#2c2f3d]"><div className="flex items-center gap-4">{renderAvatar(member.game_class, "w-10 h-10")}<div><div className="font-bold text-[#e9e9ed] flex items-center gap-2">{member.nickname} {member.role === 'admin' && <span className="bg-[#9184d9] text-[#161826] text-[10px] px-2 py-0.5 rounded-full">ADMIN</span>}</div><div className="text-xs text-[#9397ab]">{member.game_class}</div></div></div>{member.id !== user.id && member.role !== 'admin' && (<button onClick={() => handleDeleteMember(member.id, member.nickname)} className="px-4 py-2 bg-[#3a2430] text-[#eda3a3] rounded-xl text-xs font-bold hover:bg-[#4d2b36] transition-all">강퇴</button>)}</div>))}</div></div>
+          <div className="bg-[#ffffff] p-6 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-full"><div className="flex items-center justify-between mb-6"><h3 className="text-xl font-bold text-[#0f3f57] flex items-center gap-2"><Icons.Admin /> 회원 관리</h3><button onClick={openDungeonModal} className="flex items-center gap-2 bg-[#17a2d9] text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0e8ec0] transition-all shadow-md active:scale-95"><Icons.Edit /> 던전 목록 관리</button></div><div className="space-y-4">{allProfiles.map(member => (<div key={member.id} className="flex items-center justify-between bg-[#eef7fe] p-4 rounded-2xl border border-[#cfe6f5] shadow-[0_4px_16px_rgba(20,110,150,0.07)]"><div className="flex items-center gap-4">{renderAvatar(member.game_class, "w-10 h-10")}<div><div className="font-bold text-[#0f3f57] flex items-center gap-2">{member.nickname} {member.role === 'admin' && <span className="bg-[#17a2d9] text-white text-[10px] px-2 py-0.5 rounded-full">ADMIN</span>}</div><div className="text-xs text-[#5d87a1]">{member.game_class}</div></div></div>{member.id !== user.id && member.role !== 'admin' && (<button onClick={() => handleDeleteMember(member.id, member.nickname)} className="px-4 py-2 bg-[#ffe7eb] text-[#e0526a] rounded-xl text-xs font-bold hover:bg-[#ffd6de] transition-all">강퇴</button>)}</div>))}</div></div>
         )}
       </main>
 
-      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-[#161826]/88 backdrop-blur-xl border-t border-[#2c2f3d] flex justify-around items-center py-2 z-40 pb-safe">
-        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'home' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Home /><span className="text-[10px] font-bold">홈</span></button>
-        <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'calendar' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Calendar /><span className="text-[10px] font-bold">달력</span></button>
-        <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'stats' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Chart /><span className="text-[10px] font-bold">통계</span></button>
-        <button onClick={() => setActiveTab('board')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'board' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Board /><span className="text-[10px] font-bold">팁</span></button>
-        <button onClick={() => setActiveTab('voice')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'voice' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Mic /><span className="text-[10px] font-bold">보이스</span></button>
-        {isAdmin && <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'admin' ? 'text-[#b5abfc]' : 'text-[#8b8fa3]'}`}><Icons.Admin /><span className="text-[10px] font-bold">관리</span></button>}
+      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white/85 backdrop-blur-xl border-t border-[#cfe6f5] flex justify-around items-center py-2 z-40 pb-safe">
+        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'home' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Home /><span className="text-[10px] font-bold">홈</span></button>
+        <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'calendar' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Calendar /><span className="text-[10px] font-bold">달력</span></button>
+        <button onClick={() => setActiveTab('stats')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'stats' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Chart /><span className="text-[10px] font-bold">통계</span></button>
+        <button onClick={() => setActiveTab('board')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'board' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Board /><span className="text-[10px] font-bold">팁</span></button>
+        <button onClick={() => setActiveTab('voice')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'voice' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Mic /><span className="text-[10px] font-bold">보이스</span></button>
+        {isAdmin && <button onClick={() => setActiveTab('admin')} className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all w-16 ${activeTab === 'admin' ? 'text-[#0b7fae]' : 'text-[#6d94ac]'}`}><Icons.Admin /><span className="text-[10px] font-bold">관리</span></button>}
       </nav>
 
       {/* --- 모달들 (기존과 동일) --- */}
-      {isProfileModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#232532] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-[#e9e9ed]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#9397ab] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#8b8fa3] mb-2 ml-1">닉네임</label><input className="w-full bg-[#1c1e2b] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#9184d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#8b8fa3] mb-2 ml-1">직업</label><select className="w-full bg-[#1c1e2b] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#9184d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="bg-[#2b2741] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#423a6a]"><span className="text-xs font-bold text-[#b5abfc]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#20222f] text-[#a8aab8] rounded-2xl font-bold hover:bg-[#333747]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#9184d9] text-[#161826] py-4 rounded-2xl font-bold hover:bg-[#a396e4] shadow-lg transition-all">저장</button></div></div></div>)}
+      {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
       
       {/* ★ 등록 모달 (날짜 선택 수정됨) */}
-      {isCreateModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#232532] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-[#e9e9ed]">일정 등록</h2><input type="date" className="w-full bg-[#1c1e2b] p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-[#9184d9] font-medium text-[#a8aab8] cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-[#20222f] p-1 rounded-xl mb-4"><button onClick={() => setRaidType('abyss')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-[#232532] text-[#b5abfc] shadow-sm' : 'text-[#8b8fa3]'}`}>어비스</button><button onClick={() => setRaidType('raid')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-[#232532] text-[#b5abfc] shadow-sm' : 'text-[#8b8fa3]'}`}>레이드</button></div><div className="mb-6 text-left">
+      {isCreateModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-[#0f3f57]">일정 등록</h2><input type="date" className="w-full bg-[#eef7fe] p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-[#17a2d9] font-medium text-[#4a7d97] cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-4"><button onClick={() => setRaidType('abyss')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-[#ffffff] text-[#0b7fae] shadow-sm' : 'text-[#6d94ac]'}`}>어비스</button><button onClick={() => setRaidType('raid')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-[#ffffff] text-[#0b7fae] shadow-sm' : 'text-[#6d94ac]'}`}>레이드</button></div><div className="mb-6 text-left">
         <div className="flex items-center justify-between mb-2 px-1">
-          <label className="block text-xs font-bold text-[#8b8fa3]">던전 선택</label>
+          <label className="block text-xs font-bold text-[#6d94ac]">던전 선택</label>
           {/* ★ 관리자만 보이게 하려면 아래 true 를 isAdmin 으로 바꾸세요 */}
-          {isAdmin && (<button onClick={openDungeonModal} className="flex items-center gap-1 text-xs font-bold text-[#b5abfc] hover:text-[#d2cefd] transition-colors"><Icons.Edit /> 목록 편집</button>)}
+          {true && (<button onClick={openDungeonModal} className="flex items-center gap-1 text-xs font-bold text-[#0b7fae] hover:text-[#075f84] transition-colors"><Icons.Edit /> 목록 편집</button>)}
         </div>
-        <select className="w-full bg-[#1c1e2b] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#9184d9] cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{dungeonList(raidType).map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select>
-      </div><div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-[#9184d9] bg-[#2b2741] text-[#d2cefd]' : 'border-[#2c2f3d] text-[#8b8fa3] hover:border-[#3f424d]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-[#9184d9] bg-[#2b2741] text-[#d2cefd]' : 'border-[#2c2f3d] text-[#8b8fa3] hover:border-[#3f424d]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div><div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-[#20222f] text-[#a8aab8] rounded-2xl font-bold hover:bg-[#333747] transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-[#9184d9] text-[#161826] rounded-2xl font-bold hover:bg-[#a396e4] shadow-lg transition-all">등록</button></div></div></div>)}
+        <select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{dungeonList(raidType).map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select>
+      </div><div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-[#17a2d9] bg-[#e4f4fd] text-[#075f84]' : 'border-[#cfe6f5] text-[#6d94ac] hover:border-[#a7d1e9]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-[#17a2d9] bg-[#e4f4fd] text-[#075f84]' : 'border-[#cfe6f5] text-[#6d94ac] hover:border-[#a7d1e9]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div><div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9] transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-[#17a2d9] text-white rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">등록</button></div></div></div>)}
 
-      {isWriteModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#232532] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-6 text-[#e9e9ed] flex items-center gap-2"><Icons.Board /> 팁 작성하기</h2><input className="w-full bg-[#1c1e2b] p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-[#9184d9] transition-all font-bold" placeholder="제목을 입력하세요" value={postTitle} onChange={e => setPostTitle(e.target.value)} autoFocus /><textarea className="w-full bg-[#1c1e2b] p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-[#9184d9] transition-all h-40 resize-none" placeholder="내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} /><div className="mb-6"><div className="flex gap-2 mb-2"><div className="flex-1"><input type="file" accept="image/*" id="img-upload" className="hidden" onChange={handleImageSelect} /><label htmlFor="img-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#20222f] rounded-xl cursor-pointer hover:bg-[#333747] transition-all text-xs font-bold border border-dashed border-[#3f424d]"><Icons.Camera /> {selectedImage ? '사진 변경' : '사진 첨부'}</label></div><div className="flex-1"><input type="file" id="file-upload" className="hidden" onChange={handleFileSelect} /><label htmlFor="file-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#20222f] rounded-xl cursor-pointer hover:bg-[#333747] transition-all text-xs font-bold border border-dashed border-[#3f424d]"><Icons.Clip /> {selectedFile ? '파일 변경' : '파일 첨부'}</label></div></div>{(previewUrl || selectedFile) && (<div className="space-y-2">{previewUrl && (<div className="relative w-full h-32 rounded-xl overflow-hidden border border-[#343848]"><img src={previewUrl} className="w-full h-full object-cover" alt="미리보기" /><button onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1"><Icons.Close /></button></div>)}{selectedFile && (<div className="flex items-center justify-between bg-[#2b2741] p-3 rounded-xl border border-[#423a6a]"><div className="flex items-center gap-2 overflow-hidden"><Icons.File /><span className="text-xs font-bold text-[#d2cefd] truncate">{selectedFile.name}</span></div><button onClick={() => setSelectedFile(null)} className="text-[#8b8fa3] hover:text-[#f0a3a3]"><Icons.Close /></button></div>)}</div>)}</div><div className="flex gap-3"><button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-[#20222f] text-[#a8aab8] rounded-2xl font-bold hover:bg-[#333747] transition-colors">취소</button><button onClick={handleWritePost} disabled={uploading} className="flex-1 py-4 bg-[#9184d9] text-[#161826] rounded-2xl font-bold hover:bg-[#a396e4] shadow-lg transition-all disabled:bg-[#4a4d5b]">{uploading ? '업로드 중...' : '작성완료'}</button></div></div></div>)}
-      {isDetailModalOpen && (<div className="fixed inset-0 bg-black/60 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#232532] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden"><div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-[#9184d9]' : 'bg-[#d98484]'}`}></div><div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-[#75798c] hover:text-[#f0a3a3] p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-[#75798c] hover:text-[#e9e9ed] p-2 transition-all"><Icons.Close /></button></div><h2 className="text-2xl font-extrabold mb-2 pr-20 text-[#e9e9ed] leading-tight">{selectedRaid?.title}</h2><div className="flex items-center gap-2 mb-6 bg-[#1c1e2b] p-2 rounded-xl border border-[#2c2f3d] w-fit"><span className="text-xs text-[#8b8fa3] font-bold">HOST</span>{selectedRaid?.host_avatar && renderAvatar(selectedRaid.host_avatar, "w-5 h-5")}<span className="text-sm font-bold text-[#c9cad3]">{selectedRaid?.host_name || '알수없음'}</span></div><div className="bg-[#1c1e2b] p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-[#2c2f3d]"><p className="text-xs font-bold text-[#8b8fa3] mb-4 uppercase tracking-wider flex items-center justify-between"><span>참가자 현황</span><span className={`px-2 py-1 rounded-full text-xs ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-[#3a2430] text-[#eda3a3]' : 'bg-[#423a6a] text-[#b5abfc]'}`}>{participants.length} / {selectedRaid?.max_members || 4}명</span></p><div className="space-y-3">{participants.length === 0 ? <p className="text-[#8b8fa3] text-sm text-center py-4">참가자가 없습니다.</p> : null}{participants.map(p => (<div key={p.id} className="flex items-center justify-between bg-[#232532] p-3 rounded-2xl border border-[#2c2f3d]/50"><div className="flex items-center gap-4">{renderAvatar(p.game_class, "w-10 h-10")}<div className="flex flex-col"><span className="font-bold text-sm text-[#e9e9ed]">{p.user_name}</span><span className="text-[10px] font-bold text-[#b5abfc] uppercase tracking-wide bg-[#2b2741] px-2 py-0.5 rounded-md w-fit mt-0.5">{p.game_class}</span></div></div></div>))}</div></div><div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-[#20222f] text-[#c9cad3] rounded-2xl font-bold hover:bg-[#333747] text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-[#33202b] text-[#eda3a3] rounded-2xl font-bold hover:bg-[#43262f] text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={participants.length >= (selectedRaid?.max_members || 4)} className={`w-full py-4 text-[#161826] rounded-2xl font-bold text-lg transition-all shadow-lg ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-[#4a4d5b] cursor-not-allowed' : 'bg-[#9184d9] hover:bg-[#a396e4] active:scale-95'}`}>{participants.length >= (selectedRaid?.max_members || 4) ? '정원 마감' : '참가하기'}</button>)}</div></div></div>)}
+      {isWriteModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-6 text-[#0f3f57] flex items-center gap-2"><Icons.Board /> 팁 작성하기</h2><input className="w-full bg-[#eef7fe] p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all font-bold" placeholder="제목을 입력하세요" value={postTitle} onChange={e => setPostTitle(e.target.value)} autoFocus /><textarea className="w-full bg-[#eef7fe] p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all h-40 resize-none" placeholder="내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} /><div className="mb-6"><div className="flex gap-2 mb-2"><div className="flex-1"><input type="file" accept="image/*" id="img-upload" className="hidden" onChange={handleImageSelect} /><label htmlFor="img-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#e6f2fb] rounded-xl cursor-pointer hover:bg-[#d9edf9] transition-all text-xs font-bold border border-dashed border-[#a7d1e9]"><Icons.Camera /> {selectedImage ? '사진 변경' : '사진 첨부'}</label></div><div className="flex-1"><input type="file" id="file-upload" className="hidden" onChange={handleFileSelect} /><label htmlFor="file-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#e6f2fb] rounded-xl cursor-pointer hover:bg-[#d9edf9] transition-all text-xs font-bold border border-dashed border-[#a7d1e9]"><Icons.Clip /> {selectedFile ? '파일 변경' : '파일 첨부'}</label></div></div>{(previewUrl || selectedFile) && (<div className="space-y-2">{previewUrl && (<div className="relative w-full h-32 rounded-xl overflow-hidden border border-[#b9dcf0]"><img src={previewUrl} className="w-full h-full object-cover" alt="미리보기" /><button onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="absolute top-1 right-1 bg-[#0d3c52]/45 text-white rounded-full p-1"><Icons.Close /></button></div>)}{selectedFile && (<div className="flex items-center justify-between bg-[#e4f4fd] p-3 rounded-xl border border-[#cfeafa]"><div className="flex items-center gap-2 overflow-hidden"><Icons.File /><span className="text-xs font-bold text-[#075f84] truncate">{selectedFile.name}</span></div><button onClick={() => setSelectedFile(null)} className="text-[#6d94ac] hover:text-[#e0526a]"><Icons.Close /></button></div>)}</div>)}</div><div className="flex gap-3"><button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9] transition-colors">취소</button><button onClick={handleWritePost} disabled={uploading} className="flex-1 py-4 bg-[#17a2d9] text-white rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all disabled:bg-[#8fb9cf]">{uploading ? '업로드 중...' : '작성완료'}</button></div></div></div>)}
+      {isDetailModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden"><div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-[#17a2d9]' : 'bg-[#ff7a8a]'}`}></div><div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-[#87a9bd] hover:text-[#e0526a] p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-[#87a9bd] hover:text-[#0f3f57] p-2 transition-all"><Icons.Close /></button></div><h2 className="text-2xl font-extrabold mb-2 pr-20 text-[#0f3f57] leading-tight">{selectedRaid?.title}</h2><div className="flex items-center gap-2 mb-6 bg-[#eef7fe] p-2 rounded-xl border border-[#cfe6f5] w-fit"><span className="text-xs text-[#6d94ac] font-bold">HOST</span>{selectedRaid?.host_avatar && renderAvatar(selectedRaid.host_avatar, "w-5 h-5")}<span className="text-sm font-bold text-[#265d75]">{selectedRaid?.host_name || '알수없음'}</span></div><div className="bg-[#eef7fe] p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-[#cfe6f5]"><p className="text-xs font-bold text-[#6d94ac] mb-4 uppercase tracking-wider flex items-center justify-between"><span>참가자 현황</span><span className={`px-2 py-1 rounded-full text-xs ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-[#ffe7eb] text-[#e0526a]' : 'bg-[#cfeafa] text-[#0b7fae]'}`}>{participants.length} / {selectedRaid?.max_members || 4}명</span></p><div className="space-y-3">{participants.length === 0 ? <p className="text-[#6d94ac] text-sm text-center py-4">참가자가 없습니다.</p> : null}{participants.map(p => (<div key={p.id} className="flex items-center justify-between bg-[#ffffff] p-3 rounded-2xl border border-[#cfe6f5] shadow-[0_4px_16px_rgba(20,110,150,0.07)]/50"><div className="flex items-center gap-4">{renderAvatar(p.game_class, "w-10 h-10")}<div className="flex flex-col"><span className="font-bold text-sm text-[#0f3f57]">{p.user_name}</span><span className="text-[10px] font-bold text-[#0b7fae] uppercase tracking-wide bg-[#e4f4fd] px-2 py-0.5 rounded-md w-fit mt-0.5">{p.game_class}</span></div></div></div>))}</div></div><div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-[#e6f2fb] text-[#265d75] rounded-2xl font-bold hover:bg-[#d9edf9] text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-[#fff1f4] text-[#e0526a] rounded-2xl font-bold hover:bg-[#ffdde4] text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={participants.length >= (selectedRaid?.max_members || 4)} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-[#8fb9cf] cursor-not-allowed' : 'bg-[#17a2d9] hover:bg-[#0e8ec0] active:scale-95'}`}>{participants.length >= (selectedRaid?.max_members || 4) ? '정원 마감' : '참가하기'}</button>)}</div></div></div>)}
 
       {/* ★ 던전 목록 관리 모달 */}
       {isDungeonModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-md flex justify-center items-center z-[10000] p-4 animate-in fade-in zoom-in-95 duration-200">
-          <div className="bg-[#232532] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative flex flex-col max-h-[85vh]">
+        <div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[10000] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative flex flex-col max-h-[85vh]">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-[#e9e9ed]">던전 목록 관리</h2>
-              <button onClick={() => setIsDungeonModalOpen(false)} className="text-[#75798c] hover:text-[#e9e9ed] p-1 transition-all"><Icons.Close /></button>
+              <h2 className="text-xl font-bold text-[#0f3f57]">던전 목록 관리</h2>
+              <button onClick={() => setIsDungeonModalOpen(false)} className="text-[#87a9bd] hover:text-[#0f3f57] p-1 transition-all"><Icons.Close /></button>
             </div>
 
-            <div className="flex bg-[#20222f] p-1 rounded-xl mb-4">
-              <button onClick={() => { setDungeonTab('abyss'); setEditingId(null); }} className={`flex-1 py-2 rounded-lg font-bold transition-all ${dungeonTab === 'abyss' ? 'bg-[#232532] text-[#b5abfc] shadow-sm' : 'text-[#8b8fa3]'}`}>어비스</button>
-              <button onClick={() => { setDungeonTab('raid'); setEditingId(null); }} className={`flex-1 py-2 rounded-lg font-bold transition-all ${dungeonTab === 'raid' ? 'bg-[#232532] text-[#b5abfc] shadow-sm' : 'text-[#8b8fa3]'}`}>레이드</button>
+            <div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-4">
+              <button onClick={() => { setDungeonTab('abyss'); setEditingId(null); }} className={`flex-1 py-2 rounded-lg font-bold transition-all ${dungeonTab === 'abyss' ? 'bg-[#ffffff] text-[#0b7fae] shadow-sm' : 'text-[#6d94ac]'}`}>어비스</button>
+              <button onClick={() => { setDungeonTab('raid'); setEditingId(null); }} className={`flex-1 py-2 rounded-lg font-bold transition-all ${dungeonTab === 'raid' ? 'bg-[#ffffff] text-[#0b7fae] shadow-sm' : 'text-[#6d94ac]'}`}>레이드</button>
             </div>
 
             <div className="flex-1 overflow-y-auto -mx-1 px-1 mb-4">
               {dungeons.filter(d => d.type === dungeonTab).length === 0 ? (
-                <div className="text-center py-8 bg-[#1c1e2b] rounded-2xl border border-dashed border-[#343848]">
-                  <p className="text-sm text-[#9397ab] mb-1 font-bold">아직 DB에 저장된 목록이 없습니다.</p>
-                  <p className="text-xs text-[#8b8fa3] mb-4">지금은 코드에 있는 기본 목록이 사용 중입니다.</p>
-                  <button onClick={handleSeedDungeons} className="px-5 py-3 bg-[#9184d9] text-[#161826] rounded-xl font-bold text-sm hover:bg-[#a396e4] transition-all">기본 목록 불러오기</button>
+                <div className="text-center py-8 bg-[#eef7fe] rounded-2xl border border-dashed border-[#b9dcf0]">
+                  <p className="text-sm text-[#5d87a1] mb-1 font-bold">아직 DB에 저장된 목록이 없습니다.</p>
+                  <p className="text-xs text-[#6d94ac] mb-4">지금은 코드에 있는 기본 목록이 사용 중입니다.</p>
+                  <button onClick={handleSeedDungeons} className="px-5 py-3 bg-[#17a2d9] text-white rounded-xl font-bold text-sm hover:bg-[#0e8ec0] transition-all">기본 목록 불러오기</button>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {dungeons.filter(d => d.type === dungeonTab).map(row => (
-                    <div key={row.id} className="flex items-center gap-2 bg-[#1c1e2b] p-2 rounded-2xl border border-[#2c2f3d]">
+                    <div key={row.id} className="flex items-center gap-2 bg-[#eef7fe] p-2 rounded-2xl border border-[#cfe6f5] shadow-[0_4px_16px_rgba(20,110,150,0.07)]">
                       {editingId === row.id ? (
                         <>
                           <input
-                            className="flex-1 bg-[#232532] px-3 py-2 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-[#9184d9] min-w-0"
+                            className="flex-1 bg-[#ffffff] px-3 py-2 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-[#17a2d9] min-w-0"
                             value={editingName}
                             onChange={e => setEditingName(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') handleRenameDungeon(row); if (e.key === 'Escape') setEditingId(null); }}
                             autoFocus
                           />
-                          <button onClick={() => handleRenameDungeon(row)} className="px-3 py-2 bg-[#9184d9] text-[#161826] rounded-xl text-xs font-bold hover:bg-[#a396e4] shrink-0">저장</button>
-                          <button onClick={() => { setEditingId(null); setEditingName(''); }} className="px-3 py-2 bg-[#2c2f3d] text-[#a8aab8] rounded-xl text-xs font-bold hover:bg-[#3f424d] shrink-0">취소</button>
+                          <button onClick={() => handleRenameDungeon(row)} className="px-3 py-2 bg-[#17a2d9] text-white rounded-xl text-xs font-bold hover:bg-[#0e8ec0] shrink-0">저장</button>
+                          <button onClick={() => { setEditingId(null); setEditingName(''); }} className="px-3 py-2 bg-[#cfe6f5] text-[#4a7d97] rounded-xl text-xs font-bold hover:bg-[#a7d1e9] shrink-0">취소</button>
                         </>
                       ) : (
                         <>
-                          <span className="flex-1 px-2 font-bold text-sm text-[#dcdce3] truncate">{row.name}</span>
-                          <button onClick={() => { setEditingId(row.id); setEditingName(row.name); }} className="p-2 text-[#8b8fa3] hover:text-[#d2cefd] hover:bg-[#2b2e3d] rounded-lg transition-all shrink-0" title="이름 수정"><Icons.Edit /></button>
-                          <button onClick={() => handleDeleteDungeon(row)} className="p-2 text-[#8b8fa3] hover:text-[#f0a3a3] hover:bg-[#2b2e3d] rounded-lg transition-all shrink-0" title="삭제"><Icons.Trash /></button>
+                          <span className="flex-1 px-2 font-bold text-sm text-[#164a63] truncate">{row.name}</span>
+                          <button onClick={() => { setEditingId(row.id); setEditingName(row.name); }} className="p-2 text-[#6d94ac] hover:text-[#075f84] hover:bg-[#f5fbff] rounded-lg transition-all shrink-0" title="이름 수정"><Icons.Edit /></button>
+                          <button onClick={() => handleDeleteDungeon(row)} className="p-2 text-[#6d94ac] hover:text-[#e0526a] hover:bg-[#f5fbff] rounded-lg transition-all shrink-0" title="삭제"><Icons.Trash /></button>
                         </>
                       )}
                     </div>
@@ -675,17 +675,17 @@ export default function RaidScheduler() {
               )}
             </div>
 
-            <div className="border-t border-[#2c2f3d] pt-4">
-              <label className="block text-xs font-bold text-[#8b8fa3] mb-2 ml-1">새 던전 추가</label>
+            <div className="border-t border-[#cfe6f5] pt-4">
+              <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">새 던전 추가</label>
               <div className="flex gap-2">
                 <input
-                  className="flex-1 bg-[#1c1e2b] px-4 py-3 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-[#9184d9] min-w-0"
+                  className="flex-1 bg-[#eef7fe] px-4 py-3 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-[#17a2d9] min-w-0"
                   placeholder={dungeonTab === 'abyss' ? '예) 지옥 11단계' : '예) 신규 레이드 [입문]'}
                   value={newDungeonName}
                   onChange={e => setNewDungeonName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleAddDungeon(); }}
                 />
-                <button onClick={handleAddDungeon} className="px-5 py-3 bg-[#9184d9] text-[#161826] rounded-2xl font-bold text-sm hover:bg-[#a396e4] shadow-md transition-all shrink-0">추가</button>
+                <button onClick={handleAddDungeon} className="px-5 py-3 bg-[#17a2d9] text-white rounded-2xl font-bold text-sm hover:bg-[#0e8ec0] shadow-md transition-all shrink-0">추가</button>
               </div>
             </div>
           </div>
@@ -695,7 +695,7 @@ export default function RaidScheduler() {
       {/* ★ 이미지 확대 보기 모달 (Lightbox) */}
       {viewImage && (
         <div className="fixed inset-0 bg-black/90 z-[99999] flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200" onClick={() => setViewImage(null)}>
-          <button onClick={() => setViewImage(null)} className="absolute top-5 right-5 text-white/80 hover:text-white p-2 rounded-full bg-black/50 hover:bg-black/80 transition-all"><Icons.Close /></button>
+          <button onClick={() => setViewImage(null)} className="absolute top-5 right-5 text-white/80 hover:text-white p-2 rounded-full bg-[#0d3c52]/45 hover:bg-black/80 transition-all"><Icons.Close /></button>
           <img src={viewImage} alt="확대 이미지" className="max-w-full max-h-full rounded-lg shadow-2xl object-contain cursor-default" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
