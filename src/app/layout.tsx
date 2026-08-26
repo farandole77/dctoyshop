@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Star guild",
+  title: "환생",
   description: "마비노기모바일 알리사 서버 길드 커뮤니티입니다.",
 };
 
