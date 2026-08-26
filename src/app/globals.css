@@ -2,46 +2,61 @@
 @import "tailwindcss";
 
 /* ============================================================
-   Star guild — Nocturne 다크 테마 토큰
-   색을 바꾸고 싶으면 여기 값만 고치면 전체가 따라갑니다.
+   환생 — 한여름 해수욕장 테마
+   색을 바꾸고 싶으면 아래 값만 고치면 전체가 따라옵니다.
    ============================================================ */
 :root {
-  --bg:        #161826;  /* 페이지 바닥 */
-  --surface:   #232532;  /* 카드 / 모달 */
-  --surface-2: #1c1e2b;  /* 입력창처럼 한 단 들어간 면 */
-  --text:      #e9e9ed;
-  --muted:     #9397ab;
-  --divider:   #2c2f3d;
-  --accent:    #9184d9;  /* 블러플 액센트 */
-  --accent-lo: #423a6a;  /* 액센트 틴트 배경 */
-  --accent-hi: #b5abfc;  /* 액센트 글자 */
+  --sky-top:   #bfe6fb;  /* 하늘 위 */
+  --sky-mid:   #e6f5fe;  /* 하늘 아래 */
+  --sand:      #fdf4e3;  /* 백사장 */
+  --surface:   #ffffff;  /* 카드 / 모달 */
+  --surface-2: #eef7fe;  /* 입력창 */
+  --text:      #0f3f57;  /* 바다 남색 */
+  --muted:     #5d87a1;
+  --divider:   #cfe6f5;
+  --accent:    #17a2d9;  /* 바다 */
+  --accent-lo: #cfeafa;  /* 하늘빛 틴트 */
+  --accent-hi: #0b7fae;
+  --coral:     #ff7a8a;  /* 산호 / 히비스커스 */
+  --sun:       #ffc94d;  /* 햇살 */
 }
 
-html { color-scheme: dark; }
+html { color-scheme: light; }
 
 body {
-  background: var(--bg);
   color: var(--text);
+  background:
+    radial-gradient(1200px 420px at 50% 100%, var(--sand) 0%, transparent 72%),
+    linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 46%, #f2fbff 100%);
+  background-attachment: fixed;
   font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto,
     "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR",
     "Malgun Gothic", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
 }
 
-/* 폼 요소가 OS 기본 밝은 색으로 튀는 것 방지 */
+/* 수평선 위 햇살 — 아주 옅게 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(760px 300px at 78% 6%, rgba(255, 233, 170, 0.42), transparent 66%);
+  z-index: 0;
+}
+
 input, select, textarea, button { color: inherit; }
 select option { background: var(--surface); color: var(--text); }
-input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); cursor: pointer; }
-::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+::selection { background: color-mix(in srgb, var(--accent) 26%, transparent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* 스크롤바 */
-* { scrollbar-color: #3f424d transparent; scrollbar-width: thin; }
+* { scrollbar-color: #9fd0e8 transparent; scrollbar-width: thin; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #3f424d; border-radius: 8px; }
+::-webkit-scrollbar-thumb { background: #9fd0e8; border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* ============================================================
-   FullCalendar — 다크 재정의
+   FullCalendar — 밝은 바다 테마
    (라이브러리 내부 마크업이라 Tailwind로는 닿지 않습니다)
    ============================================================ */
 .fc {
@@ -50,21 +65,19 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); cur
   --fc-page-bg-color: transparent;
   --fc-neutral-bg-color: transparent;
   --fc-border-color: var(--divider);
-  --fc-today-bg-color: color-mix(in srgb, var(--accent) 12%, transparent);
-  --fc-now-indicator-color: var(--accent);
-  --fc-list-event-hover-bg-color: color-mix(in srgb, var(--text) 6%, transparent);
+  --fc-today-bg-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  --fc-now-indicator-color: var(--coral);
+  --fc-list-event-hover-bg-color: var(--surface-2);
   color: var(--text);
 }
 
-/* 월/년도 타이틀 */
 .fc-toolbar-title {
   font-size: 1.35rem !important;
-  font-weight: 500 !important;
+  font-weight: 700 !important;
   letter-spacing: -0.02em;
   color: var(--text);
 }
 
-/* 요일 헤더 */
 .fc-col-header-cell {
   background-color: transparent !important;
   border: none !important;
@@ -73,64 +86,58 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); cur
   color: var(--muted);
   text-transform: uppercase;
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.06em;
 }
 
-/* 날짜 칸 */
 .fc-theme-standard td,
 .fc-theme-standard th,
 .fc-scrollgrid { border-color: var(--divider) !important; }
 .fc-daygrid-day { border: 1px solid var(--divider) !important; }
 .fc-daygrid-day-frame { padding: 4px; }
-.fc-daygrid-day-number { color: var(--text); font-size: 0.82rem; opacity: 0.85; }
+.fc-daygrid-day-number { color: var(--text); font-size: 0.82rem; opacity: 0.9; }
+.fc-day-other .fc-daygrid-day-number { opacity: 0.32; }
 
-/* 지난달 / 다음달 날짜는 뒤로 물리기 */
-.fc-day-other .fc-daygrid-day-number { opacity: 0.3; }
-
-/* 오늘 */
 .fc-day-today { background-color: var(--fc-today-bg-color) !important; }
 .fc-day-today .fc-daygrid-day-number {
   color: var(--accent-hi);
-  font-weight: 700;
+  font-weight: 800;
   opacity: 1;
 }
 
-/* 주말 */
-.fc-day-sat .fc-daygrid-day-number { color: #a8b6e0; }
-.fc-day-sun .fc-daygrid-day-number { color: #e0a8b0; }
+/* 주말 — 바다와 히비스커스 */
+.fc-day-sat .fc-daygrid-day-number { color: #2f8fc4; }
+.fc-day-sun .fc-daygrid-day-number { color: #e0526a; }
 
 /* 일정 칩 */
 .fc-event {
-  border-radius: 8px !important;
+  border-radius: 9px !important;
   padding: 2px 6px !important;
   font-size: 0.78rem !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   border: none !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(15, 63, 87, 0.12);
   cursor: pointer;
 }
-.fc-event:hover { filter: brightness(1.25); }
+.fc-event:hover { filter: brightness(0.97) saturate(1.15); }
 .fc-event-title, .fc-event-time { color: var(--text); }
-.fc-daygrid-more-link { color: var(--accent-hi) !important; font-size: 0.72rem; }
+.fc-daygrid-more-link { color: var(--accent-hi) !important; font-size: 0.72rem; font-weight: 700; }
 
-/* 이전 / 다음 / 오늘 버튼 — 채우지 않고 외곽선으로 */
+/* 이전 / 다음 / 오늘 버튼 */
 .fc-button {
-  background-color: transparent !important;
+  background-color: var(--surface) !important;
   border: 1px solid var(--divider) !important;
   color: var(--text) !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   border-radius: 10px !important;
-  box-shadow: none !important;
+  box-shadow: 0 1px 3px rgba(20, 110, 150, 0.08) !important;
   transition: all 0.18s;
 }
-.fc-button:hover {
-  background-color: color-mix(in srgb, var(--text) 7%, transparent) !important;
-}
-.fc-button:disabled { opacity: 0.35 !important; }
+.fc-button:hover { background-color: var(--surface-2) !important; }
+.fc-button:disabled { opacity: 0.4 !important; }
 .fc-button-active,
 .fc-button:active {
-  background-color: color-mix(in srgb, var(--accent) 18%, transparent) !important;
+  background-color: var(--accent-lo) !important;
   color: var(--accent-hi) !important;
   border-color: var(--accent) !important;
 }
