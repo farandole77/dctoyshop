@@ -170,6 +170,7 @@ export default function RaidScheduler() {
   const [newCharm, setNewCharm] = useState('');
 
   // ★ 길드원 순위
+  const rankSelfHealed = useRef(false);   // 자동 갱신은 세션당 한 번만
   const [rankRows, setRankRows] = useState<any[]>([]);
   const [rankWeek, setRankWeek] = useState<string>('');
 
@@ -253,7 +254,28 @@ export default function RaidScheduler() {
       score_updated_at: new Date().toISOString(),
     };
     const { error } = await supabase.from('profiles').upsert([newProfile]);
-    if (!error) { setMyProfile(newProfile); setIsProfileModalOpen(false); } else { alert('저장 실패: ' + error.message); }
+    if (error) return alert('저장 실패: ' + error.message);
+
+    setMyProfile(newProfile);
+    setIsProfileModalOpen(false);
+
+    // ★ 캐릭터명을 넣었으면 월요일까지 기다리지 않고 바로 순위표에 반영
+    if (newProfile.character_name) refreshRankingNow();
+  };
+
+  // 순위 즉시 갱신 (공식 랭킹 수집은 건너뛰고 빠르게)
+  const refreshRankingNow = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      await fetch('/api/rankings/refresh', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (activeTab === 'stats') await fetchGuildRanking();
+    } catch (e) {
+      console.error('순위 즉시 갱신 실패:', e);
+    }
   };
   const openEditProfile = () => {
     if (myProfile) {
@@ -566,6 +588,13 @@ export default function RaidScheduler() {
       }
     }
     if (!cur || cur.length === 0) { setRankRows([]); setRankWeek(''); return; }
+
+    // 내 캐릭터가 아직 표에 없으면(가입 직후 등) 한 번 즉시 갱신해 봅니다.
+    if (myProfile?.character_name && !cur.some((r: any) => r.character_name === myProfile.character_name) && !rankSelfHealed.current) {
+      rankSelfHealed.current = true;
+      await refreshRankingNow();
+      return;
+    }
 
     const prevWeek = curWeek === thisWeek ? lastWeek
       : new Date(new Date(curWeek).getTime() - 7 * 86400000).toISOString().split('T')[0];
