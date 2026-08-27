@@ -48,11 +48,41 @@ const DEFAULT_DUNGEON_DATA: { [key: string]: string[] } = {
 
 const TYPE_TAG: { [key: string]: string } = { abyss: '[어비스]', raid: '[레이드]' };
 
-// 어비스 계열인지 (달력 색상 · 축약 글자수 · 통계 분류에 함께 씁니다)
+// 어비스 계열인지 (참여 횟수 분류 등에 씁니다)
 const isAbyssTitle = (title: string) => title.includes('어비스') || title.includes('지옥');
 
-// 달력에 쓸 닉네임 축약 — 어비스는 앞 2글자, 레이드는 앞 1글자
-const shortNick = (nick: string, abyss: boolean) => (nick || '').trim().slice(0, abyss ? 2 : 1);
+/* ── 달력 3종 ──────────────────────────────────────────────
+   gigaeng : 어비스 기갱용 (지옥2)   — 파랑
+   explore : 어비스 탐색 및 숙제      — 청록
+   raid    : 레이드                   — 호박색                        */
+const CALENDARS = [
+  {
+    key: 'gigaeng', label: '기갱용', title: '어비스 기갱용 달력 (지옥2)',
+    dungeonType: 'abyss' as const, tag: '[어비스]',
+    full: '#2f5fe0', fullText: '#ffffff', open: '#bcd4fb', openText: '#123a75',
+    legend: [{ c: '#2f5fe0', t: '모집완료' }, { c: '#bcd4fb', t: '모집중' }],
+  },
+  {
+    key: 'explore', label: '탐색·숙제', title: '어비스 탐색 및 숙제 달력',
+    dungeonType: 'abyss' as const, tag: '[어비스]',
+    full: '#2e8b84', fullText: '#ffffff', open: '#bfe6e0', openText: '#14514c',
+    legend: [{ c: '#2e8b84', t: '모집완료' }, { c: '#bfe6e0', t: '모집중' }],
+  },
+  {
+    key: 'raid', label: '레이드', title: '레이드 달력',
+    dungeonType: 'raid' as const, tag: '[레이드]',
+    full: '#f0b429', fullText: '#4a3208', open: '#fbe0bc', openText: '#6b4a12',
+    legend: [{ c: '#f0b429', t: '모집완료' }, { c: '#fbe0bc', t: '모집중' }],
+  },
+];
+/* ── 어비스 기갱 3종 ───────────────────────────────────── */
+const GIGAENG = [
+  { key: 'heosang', label: '허상', color: '#7c5cd6', soft: '#ece5fb' },
+  { key: 'gwanggi', label: '광기', color: '#d1495b', soft: '#fbe3e6' },
+  { key: 'mulgil',  label: '물길', color: '#1c86b8', soft: '#dcefF9' },
+];
+
+const calOf = (key: string) => CALENDARS.find(c => c.key === key) || CALENDARS[0];
 
 const Icons = {
   Heart: () => (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 0 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"/></svg>),
@@ -166,25 +196,19 @@ export default function RaidScheduler() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   const [raidTitle, setRaidTitle] = useState('');
-  const [raidType, setRaidType] = useState<'abyss' | 'raid'>('abyss');
+  const [raidType, setRaidType] = useState<string>('gigaeng');
   const [selectedDungeon, setSelectedDungeon] = useState('');
   const [maxMembers, setMaxMembers] = useState(4);
 
   // ★ 프로필: 인게임 캐릭터 정보
   const [newCharName, setNewCharName] = useState('');
-  const [newCombat, setNewCombat] = useState('');
-  const [newLife, setNewLife] = useState('');
-  const [newCharm, setNewCharm] = useState('');
+  const [gig, setGig] = useState<{ [k: string]: string }>({});
 
   // ★ 어비스 기록
-  const [rankMode, setRankMode] = useState<'power' | 'abyss'>('power');
-  const [abyssRows, setAbyssRows] = useState<any[]>([]);
-  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
-  const [recDungeon, setRecDungeon] = useState('');
-  const [recMin, setRecMin] = useState('');
-  const [recSec, setRecSec] = useState('');
-  const [recScore, setRecScore] = useState('');
-  const [recMemo, setRecMemo] = useState('');
+  const [rankMode, setRankMode] = useState<string>('heosang');
+
+  // ★ 도와줘
+  const [helpRows, setHelpRows] = useState<any[]>([]);
 
   // ★ 롤링페이퍼
   const [papers, setPapers] = useState<any[]>([]);
@@ -205,7 +229,7 @@ export default function RaidScheduler() {
   // ★ 모바일 홈 화면용: 일정별 참가 인원수
   const [raidCounts, setRaidCounts] = useState<{ [key: string]: number }>({});
   const [raidNames, setRaidNames] = useState<{ [key: string]: string[] }>({});
-  const [raidRows, setRaidRows] = useState<any[]>([]);
+  const [activeCalendar, setActiveCalendar] = useState<string>('gigaeng');
 
   // ★ 던전 목록 관리용 상태
   const [dungeons, setDungeons] = useState<any[]>([]);
@@ -234,22 +258,31 @@ export default function RaidScheduler() {
 
   useEffect(() => { initialize(); }, []);
   useEffect(() => {
-    if (activeTab === 'stats') { fetchGuildRanking(); fetchAbyssRecords(); }
+    if (activeTab === 'stats') { fetchGuildRanking(); fetchHelpRequests(); }
     if (activeTab === 'paper') fetchPapers();
     if (activeTab === 'board') fetchPosts();
     if (activeTab === 'admin') fetchAllProfiles();
   }, [activeTab]);
 
-  // ★ 달력에 표시할 이벤트 — 제목 자리에 참가자 닉네임을 넣습니다.
-  //    어비스는 앞 2글자, 레이드는 앞 1글자로 줄여 한 칸에 여러 명이 들어가게 합니다.
-  const calendarEvents = raids.map(ev => {
-    const abyss = isAbyssTitle(ev.title);
-    const names = raidNames[ev.id] || [];
-    const label = names.length > 0
-      ? names.map(n => shortNick(n, abyss)).join(' ')
-      : '모집중';
-    return { ...ev, title: label, extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title } };
-  });
+  // ★ 달력에 표시할 이벤트
+  //    제목 자리에 [모집중]/[모집완료] 와 참가자 닉네임을 넣습니다.
+  const calendarEvents = raids
+    .filter(ev => ev.calendar_type === activeCalendar)
+    .map(ev => {
+      const cal = calOf(ev.calendar_type);
+      const names = raidNames[ev.id] || [];
+      const max = ev.max_members || 4;
+      const isFull = names.length >= max;
+      const who = names.length > 0 ? names.join(', ') : '아직 없음';
+      return {
+        ...ev,
+        title: `[${isFull ? '모집완료' : '모집중'}] ${who}`,
+        backgroundColor: isFull ? cal.full : cal.open,
+        borderColor: 'transparent',
+        textColor: isFull ? cal.fullText : cal.openText,
+        extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title },
+      };
+    });
 
   // ★ 현재 사용할 던전 이름 목록 (DB 우선, 없으면 기본값)
   const dungeonList = (type: 'abyss' | 'raid'): string[] => {
@@ -259,7 +292,7 @@ export default function RaidScheduler() {
   };
 
   useEffect(() => {
-    if (isCreateModalOpen) setSelectedDungeon(dungeonList(raidType)[0] || '');
+    if (isCreateModalOpen) setSelectedDungeon(dungeonList(calOf(raidType).dungeonType)[0] || '');
   }, [raidType, isCreateModalOpen, dungeons]);
 
   const initialize = async () => {
@@ -268,6 +301,7 @@ export default function RaidScheduler() {
     if (session) { setUser(session.user); await loadProfile(session.user.id); }
     await fetchRaids();
     await fetchRaidCounts();
+    await fetchHelpRequests();
     await fetchDungeons();
     setIsLoading(false);
   };
@@ -292,8 +326,10 @@ export default function RaidScheduler() {
     const newProfile: any = {
       id: user.id, nickname: newNickname, game_class: newClass,
       character_name: newCharName.trim() || null,
-      combat_power: toInt(newCombat), life_power: toInt(newLife), charm_power: toInt(newCharm),
-      score_updated_at: new Date().toISOString(),
+      heosang_score: toInt(gig.heosang_score), heosang_seconds: toInt(gig.heosang_seconds),
+      gwanggi_score: toInt(gig.gwanggi_score), gwanggi_seconds: toInt(gig.gwanggi_seconds),
+      mulgil_score: toInt(gig.mulgil_score), mulgil_seconds: toInt(gig.mulgil_seconds),
+      records_updated_at: new Date().toISOString(),
     };
     const { error } = await supabase.from('profiles').upsert([newProfile]);
     if (error) return alert('저장 실패: ' + error.message);
@@ -302,7 +338,7 @@ export default function RaidScheduler() {
     setIsProfileModalOpen(false);
 
     // ★ 캐릭터명을 넣었으면 월요일까지 기다리지 않고 바로 순위표에 반영
-    if (newProfile.character_name) refreshRankingNow();
+    refreshRankingNow();
   };
 
   // 순위 즉시 갱신 (공식 랭킹 수집은 건너뛰고 빠르게)
@@ -324,9 +360,14 @@ export default function RaidScheduler() {
       setNewNickname(myProfile.nickname);
       setNewClass(myProfile.game_class);
       setNewCharName(myProfile.character_name || '');
-      setNewCombat(myProfile.combat_power ? String(myProfile.combat_power) : '');
-      setNewLife(myProfile.life_power ? String(myProfile.life_power) : '');
-      setNewCharm(myProfile.charm_power ? String(myProfile.charm_power) : '');
+      setGig({
+        heosang_score: myProfile.heosang_score ? String(myProfile.heosang_score) : '',
+        heosang_seconds: myProfile.heosang_seconds ? String(myProfile.heosang_seconds) : '',
+        gwanggi_score: myProfile.gwanggi_score ? String(myProfile.gwanggi_score) : '',
+        gwanggi_seconds: myProfile.gwanggi_seconds ? String(myProfile.gwanggi_seconds) : '',
+        mulgil_score: myProfile.mulgil_score ? String(myProfile.mulgil_score) : '',
+        mulgil_seconds: myProfile.mulgil_seconds ? String(myProfile.mulgil_seconds) : '',
+      });
     }
     setIsProfileModalOpen(true);
   };
@@ -334,16 +375,15 @@ export default function RaidScheduler() {
   const fetchRaids = async () => {
     const { data } = await supabase.from('raids').select('*');
     if (data) {
-      setRaidRows(data);
       setRaids(data.map((raid) => ({
         id: raid.id, title: raid.title, date: raid.start_time.split('T')[0],
         created_by_email: raid.created_by_email, host_name: raid.host_name, host_avatar: raid.host_avatar,
         max_members: raid.max_members,
-        backgroundColor: isAbyssTitle(raid.title) ? '#bfe6f7' : '#ffd3da',
-        borderColor: 'transparent',
+        calendar_type: raid.calendar_type || (isAbyssTitle(raid.title) ? 'gigaeng' : 'raid'),
       })));
     }
   };
+
   const fetchPosts = async () => { const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false }); if (data) setPosts(data); };
 
   // ★ 일정별 참가자 명단 (달력 · 모바일 홈에 닉네임으로 표시)
@@ -436,7 +476,7 @@ export default function RaidScheduler() {
   };
 
   const openDungeonModal = () => {
-    setDungeonTab(raidType);
+    setDungeonTab(calOf(raidType).dungeonType);
     setEditingId(null);
     setEditingName('');
     setNewDungeonName('');
@@ -479,8 +519,8 @@ export default function RaidScheduler() {
   };
 
   const handleCreate = async () => { 
-    if (!selectedDungeon) return alert('던전 선택!'); const typeTag = raidType === 'abyss' ? '[어비스]' : '[레이드]'; const finalTitle = `${typeTag} ${selectedDungeon}`; 
-    const { data: newRaid, error } = await supabase.from('raids').insert([{ title: finalTitle, start_time: selectedDate, created_by_email: user.email, max_members: maxMembers, host_name: myProfile?.nickname || '알수없음', host_avatar: myProfile?.game_class || '모험가' }]).select().single();
+    if (!selectedDungeon) return alert('던전 선택!'); const typeTag = calOf(raidType).tag; setActiveCalendar(raidType); const finalTitle = `${typeTag} ${selectedDungeon}`; 
+    const { data: newRaid, error } = await supabase.from('raids').insert([{ title: finalTitle, start_time: selectedDate, created_by_email: user.email, max_members: maxMembers, host_name: myProfile?.nickname || '알수없음', host_avatar: myProfile?.game_class || '모험가', calendar_type: raidType }]).select().single();
     if (newRaid) { await supabase.from('participants').insert([{ raid_id: newRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); }
     setRaidTitle(''); setMaxMembers(4); setIsCreateModalOpen(false); fetchRaids(); 
   };
@@ -552,12 +592,51 @@ export default function RaidScheduler() {
     );
   };
 
+  // 오늘 도움을 요청한 사람들을 알리는 띠
+  const HelpBanner = () => {
+    if (helpRows.length === 0) return null;
+    return (
+      <div className="mb-4 bg-[#fff6e0] border border-[#f7dfa4] rounded-2xl p-3.5">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[10px] font-extrabold bg-[#f0b429] text-[#4a3208] px-2 py-1 rounded">🙋 도와줘</span>
+          <span className="text-[11px] text-[#8a6a1e]">오늘 도움을 기다리는 길드원</span>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {helpRows.map(h => {
+            const r = rankRows.find(x => x.nickname === h.nickname);
+            return (
+              <div key={h.id} className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-extrabold text-[#5b420a]">{h.nickname}</span>
+                {r && GIGAENG.map(g => (
+                  <span key={g.key} className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                    style={{ background: g.soft, color: g.color }}>
+                    {g.label} {(r[`${g.key}_score`] || 0).toLocaleString()}
+                  </span>
+                ))}
+                {h.message && <span className="text-[11px] text-[#8a6a1e] truncate">— {h.message}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const MobileHome = () => (
     <div className="md:hidden">
       <div className="mb-5">
         <div className="text-[10px] tracking-[0.1em] uppercase text-[#17a2d9]">알리사 서버 · 환생</div>
         <h2 className="text-[26px] mt-1 leading-tight">오늘 어디 가지?</h2>
       </div>
+
+      <HelpBanner />
+
+      <button onClick={toggleHelp}
+        className={`w-full mb-5 py-3 rounded-2xl font-bold text-sm transition-all border ${iAmAskingHelp
+          ? 'bg-[#f0b429] border-[#f0b429] text-[#4a3208]'
+          : 'bg-[#ffffff] border-[#f7dfa4] text-[#8a6a1e] active:bg-[#fff6e0]'}`}>
+        {iAmAskingHelp ? '🙋 도움 요청 중 — 취소하려면 누르세요' : '🙋 도와줘 — 오늘 도움이 필요해요'}
+      </button>
 
       {nextRaid ? (
         <div className="bg-[#ffffff] border border-[#cfe6f5] rounded-2xl p-4 relative overflow-hidden mb-6">
@@ -620,119 +699,123 @@ export default function RaidScheduler() {
   );
   // ====================================================
 
-  // ================= ★ 길드원 순위 =================
-  // 이번 주 월요일 (KST)
-  const mondayOf = (d: Date) => {
-    const kst = new Date(d.getTime() + 9 * 3600 * 1000);
-    const day = kst.getUTCDay();
-    const diff = day === 0 ? 6 : day - 1;
-    return new Date(kst.getTime() - diff * 86400000).toISOString().split('T')[0];
-  };
+  // ================= ★ 길드원 순위 (어비스 기갱) =================
+  const todayKST = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().split('T')[0];
+  const fmtTime = (sec: number) => sec > 0 ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : '-';
 
   const fetchGuildRanking = async () => {
-    const thisWeek = mondayOf(new Date());
-    const lastWeek = new Date(new Date(thisWeek).getTime() - 7 * 86400000).toISOString().split('T')[0];
-
-    // 최신 스냅샷 (아직 이번 주 것이 없으면 가장 최근 주)
-    let { data: cur } = await supabase.from('guild_rankings').select('*').eq('week_start', thisWeek).order('guild_rank');
-    let curWeek = thisWeek;
+    // 오늘 스냅샷 (없으면 가장 최근 날짜)
+    const today = todayKST();
+    let { data: cur } = await supabase.from('abyss_daily').select('*').eq('snapshot_date', today);
+    let curDate = today;
     if (!cur || cur.length === 0) {
-      const { data: latest } = await supabase.from('guild_rankings').select('week_start').order('week_start', { ascending: false }).limit(1);
+      const { data: latest } = await supabase.from('abyss_daily').select('snapshot_date').order('snapshot_date', { ascending: false }).limit(1);
       if (latest && latest.length > 0) {
-        curWeek = latest[0].week_start;
-        const r = await supabase.from('guild_rankings').select('*').eq('week_start', curWeek).order('guild_rank');
+        curDate = latest[0].snapshot_date;
+        const r = await supabase.from('abyss_daily').select('*').eq('snapshot_date', curDate);
         cur = r.data || [];
       }
     }
     if (!cur || cur.length === 0) { setRankRows([]); setRankWeek(''); return; }
 
-    // 내 캐릭터가 아직 표에 없으면(가입 직후 등) 한 번 즉시 갱신해 봅니다.
-    if (myProfile?.character_name && !cur.some((r: any) => r.character_name === myProfile.character_name) && !rankSelfHealed.current) {
+    // 내 기록이 아직 없으면 한 번 즉시 갱신
+    if (myProfile?.nickname && !cur.some((r: any) => r.nickname === myProfile.nickname)
+        && (myProfile.heosang_score || myProfile.gwanggi_score || myProfile.mulgil_score)
+        && !rankSelfHealed.current) {
       rankSelfHealed.current = true;
       await refreshRankingNow();
       return;
     }
 
-    const prevWeek = curWeek === thisWeek ? lastWeek
-      : new Date(new Date(curWeek).getTime() - 7 * 86400000).toISOString().split('T')[0];
-    const { data: prevRows } = await supabase.from('guild_rankings').select('character_name, guild_rank').eq('week_start', prevWeek);
-    const prevMap = new Map((prevRows || []).map((r: any) => [r.character_name, r.guild_rank]));
+    // 어제(직전) 스냅샷 — 순위 변동 계산용
+    const prevDate = new Date(new Date(curDate).getTime() - 86400000).toISOString().split('T')[0];
+    const { data: prevRows } = await supabase.from('abyss_daily').select('*').eq('snapshot_date', prevDate);
 
-    // 이번 주 참여 횟수 — 일정표에서 참가 버튼을 누른 것
-    const weekEnd = new Date(new Date(curWeek).getTime() + 6 * 86400000).toISOString().split('T')[0];
+    // 이번 주 참여 횟수
+    const weekStart = (() => {
+      const k = new Date(Date.now() + 9 * 3600 * 1000);
+      const d = k.getUTCDay();
+      return new Date(k.getTime() - (d === 0 ? 6 : d - 1) * 86400000).toISOString().split('T')[0];
+    })();
+    const weekEnd = new Date(new Date(weekStart).getTime() + 6 * 86400000).toISOString().split('T')[0];
     const { data: joins } = await supabase
       .from('participants')
-      .select('user_name, raids!inner(title, date)')
-      .gte('raids.date', curWeek)
-      .lte('raids.date', weekEnd);
+      .select('user_name, raids!inner(title, date:start_time, calendar_type)')
+      .gte('raids.start_time', weekStart)
+      .lte('raids.start_time', weekEnd + 'T23:59:59');
 
     const abyssCnt: { [k: string]: number } = {};
     const raidCnt: { [k: string]: number } = {};
     (joins || []).forEach((j: any) => {
-      const t = j.raids?.title || '';
+      const ct = j.raids?.calendar_type || (isAbyssTitle(j.raids?.title || '') ? 'gigaeng' : 'raid');
       const who = j.user_name;
-      if (t.includes('어비스') || t.includes('지옥')) abyssCnt[who] = (abyssCnt[who] || 0) + 1;
-      else raidCnt[who] = (raidCnt[who] || 0) + 1;
+      if (ct === 'raid') raidCnt[who] = (raidCnt[who] || 0) + 1;
+      else abyssCnt[who] = (abyssCnt[who] || 0) + 1;
     });
 
-    setRankWeek(curWeek);
-    setRankRows(cur.map((r: any) => {
-      const before = prevMap.get(r.character_name);
+    setRankWeek(curDate);
+    setRankRows(cur.map((r: any) => ({
+      ...r,
+      prev: (prevRows || []).find((p: any) => p.nickname === r.nickname) || null,
+      abyss: abyssCnt[r.nickname] || 0,
+      raid: raidCnt[r.nickname] || 0,
+    })));
+  };
+
+  // 선택한 기갱 종류 기준으로 정렬 + 어제 대비 변동
+  const rankedByMode = (() => {
+    const scoreKey = `${rankMode}_score`;
+    const secKey = `${rankMode}_seconds`;
+    const sortFn = (a: any, b: any) =>
+      (b[scoreKey] || 0) - (a[scoreKey] || 0) ||
+      ((a[secKey] || 99999) - (b[secKey] || 99999));
+
+    const cur = [...rankRows].filter(r => (r[scoreKey] || 0) > 0).sort(sortFn);
+    const prev = rankRows
+      .map(r => r.prev).filter(Boolean)
+      .filter((r: any) => (r[scoreKey] || 0) > 0).sort(sortFn);
+    const prevRank = new Map(prev.map((r: any, i) => [r.nickname, i + 1]));
+
+    return cur.map((r, i) => {
+      const before = prevRank.get(r.nickname);
       return {
-        ...r,
-        change: before == null ? null : before - r.guild_rank, // +면 상승
+        ...r, rank: i + 1,
+        score: r[scoreKey] || 0, seconds: r[secKey] || 0,
+        change: before == null ? null : before - (i + 1),
         isNew: before == null,
-        abyss: abyssCnt[r.nickname] || 0,
-        raid: raidCnt[r.nickname] || 0,
       };
-    }));
-  };
-
-  // ================= ★ 어비스 기록 =================
-  const fmtTime = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-
-  const fetchAbyssRecords = async () => {
-    const { data } = await supabase.from('abyss_records').select('*');
-    if (!data) return;
-    // 개인별 최고 기록만 (점수 높은 순 → 같으면 빠른 순)
-    const best: { [k: string]: any } = {};
-    data.forEach((r: any) => {
-      const cur = best[r.nickname];
-      if (!cur || r.score > cur.score || (r.score === cur.score && r.clear_seconds < cur.clear_seconds)) best[r.nickname] = r;
     });
-    const rows = Object.values(best).sort((a: any, b: any) =>
-      b.score - a.score || a.clear_seconds - b.clear_seconds);
-    setAbyssRows(rows.map((r: any, i) => ({ ...r, rank: i + 1 })));
+  })();
+  // ==============================================================
+
+  // ================= ★ 도와줘 =================
+  //  오늘 도움을 요청한 사람들. 순위표에서 그 사람 줄이 강조됩니다.
+  const fetchHelpRequests = async () => {
+    const { data } = await supabase
+      .from('help_requests').select('*')
+      .eq('request_date', todayKST())
+      .order('created_at', { ascending: false });
+    setHelpRows(data || []);
   };
 
-  const openRecordModal = () => {
+  const helpNames = new Set(helpRows.map(h => h.nickname));
+  const iAmAskingHelp = !!myProfile && helpNames.has(myProfile.nickname);
+
+  const toggleHelp = async () => {
     if (!myProfile) return alert('먼저 프로필을 설정해주세요.');
-    setRecDungeon(dungeonList('abyss')[0] || '');
-    setRecMin(''); setRecSec(''); setRecScore(''); setRecMemo('');
-    setIsRecordModalOpen(true);
+    if (iAmAskingHelp) {
+      const { error } = await supabase.from('help_requests')
+        .delete().eq('user_id', user.id).eq('request_date', todayKST());
+      if (error) return alert('취소 실패: ' + error.message);
+    } else {
+      const msg = prompt('무엇을 도와드릴까요? (선택 — 비워도 됩니다)\n예) 허상 기갱 같이 도실 분!') ?? '';
+      const { error } = await supabase.from('help_requests')
+        .insert([{ user_id: user.id, nickname: myProfile.nickname, message: msg.trim() || null }]);
+      if (error) return alert('요청 실패: ' + error.message);
+    }
+    await fetchHelpRequests();
   };
-
-  const handleSaveRecord = async () => {
-    const sec = (parseInt(recMin || '0', 10) || 0) * 60 + (parseInt(recSec || '0', 10) || 0);
-    const score = parseInt(recScore.replace(/[^0-9]/g, ''), 10) || 0;
-    if (!recDungeon) return alert('던전을 선택해주세요.');
-    if (sec <= 0) return alert('클리어 시간을 입력해주세요.');
-    const { error } = await supabase.from('abyss_records').insert([{
-      user_id: user.id, nickname: myProfile.nickname, game_class: myProfile.game_class,
-      dungeon_name: recDungeon, clear_seconds: sec, score, memo: recMemo.trim() || null,
-    }]);
-    if (error) return alert('저장 실패: ' + error.message);
-    setIsRecordModalOpen(false);
-    await fetchAbyssRecords();
-  };
-
-  const handleDeleteRecord = async (row: any) => {
-    if (!confirm('이 기록을 삭제할까요?')) return;
-    const { error } = await supabase.from('abyss_records').delete().eq('id', row.id);
-    if (error) return alert('삭제 실패: ' + error.message);
-    await fetchAbyssRecords();
-  };
-  // ================================================
+  // ============================================
 
   // ================= ★ 롤링페이퍼 =================
   const MOODS = ['💌', '😂', '🔥', '🥹', '👍', '🫶', '⭐', '🍀'];
@@ -859,7 +942,30 @@ export default function RaidScheduler() {
           </>
         ) : activeTab === 'calendar' ? (
           <div className="bg-[#ffffff] p-4 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-full flex flex-col">
-            <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={calendarEvents} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
+            {/* ★ 달력 3종 전환 */}
+            <div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-3">
+              {CALENDARS.map(c => (
+                <button key={c.key} onClick={() => setActiveCalendar(c.key)}
+                  className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${activeCalendar === c.key ? 'bg-[#ffffff] shadow-sm' : 'text-[#6d94ac]'}`}
+                  style={activeCalendar === c.key ? { color: calOf(c.key).full } : undefined}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ★ 제목 + 범례 */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-1">
+              <h3 className="text-base md:text-lg font-extrabold text-[#0f3f57]">{calOf(activeCalendar).title}</h3>
+              <div className="flex items-center gap-3">
+                {calOf(activeCalendar).legend.map(l => (
+                  <span key={l.t} className="flex items-center gap-1.5 text-[11px] font-bold text-[#4a7d97]">
+                    <span className="w-3.5 h-3.5 rounded" style={{ background: l.c }} />{l.t}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={calendarEvents} dateClick={(arg) => { setSelectedDate(arg.dateStr); setRaidType(activeCalendar); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
             {/* ★ 1. 플로팅 등록 버튼 (FAB) - 캘린더 탭일 때만 보임 */}
             <button
               onClick={openCreateModal}
@@ -870,81 +976,38 @@ export default function RaidScheduler() {
             </button>
           </div>
         ) : activeTab === 'stats' ? (
-          // ★ 길드원 순위
+          // ★ 어비스 기갱 순위
           <div className="bg-[#ffffff] p-4 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)]">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <h3 className="text-lg md:text-xl font-bold text-[#0f3f57] flex items-center gap-2">🏆 길드원 순위</h3>
+              <h3 className="text-lg md:text-xl font-bold text-[#0f3f57] flex items-center gap-2">🏆 어비스 기갱 순위</h3>
               <span className="text-[11px] text-[#6d94ac]">
-                {rankMode === 'power'
-                  ? (rankWeek ? `${rankWeek} 기준 · 매주 월요일 갱신` : '아직 집계된 순위가 없습니다')
-                  : '기록은 등록 즉시 반영됩니다'}
+                {rankWeek ? `${rankWeek} 기준 · 매일 갱신` : '아직 집계된 기록이 없습니다'}
               </span>
             </div>
 
-            <div className="flex items-center gap-2 mb-5">
-              <div className="flex bg-[#e6f2fb] p-1 rounded-xl">
-                <button onClick={() => setRankMode('power')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${rankMode === 'power' ? 'bg-[#ffffff] text-[#0f3f57] shadow-sm' : 'text-[#6d94ac]'}`}>전투력</button>
-                <button onClick={() => setRankMode('abyss')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${rankMode === 'abyss' ? 'bg-[#ffffff] text-[#0f3f57] shadow-sm' : 'text-[#6d94ac]'}`}>어비스 기록</button>
-              </div>
-              {rankMode === 'abyss' && (
-                <button onClick={openRecordModal} className="ml-auto flex items-center gap-1.5 bg-[#17a2d9] text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-[#0e8ec0] shadow-md active:scale-95 transition-all">
-                  <Icons.Plus /> 기록 등록
+            <HelpBanner />
+
+            <button onClick={toggleHelp}
+              className={`w-full mb-4 py-2.5 rounded-xl font-bold text-sm transition-all border ${iAmAskingHelp
+                ? 'bg-[#f0b429] border-[#f0b429] text-[#4a3208]'
+                : 'bg-[#ffffff] border-[#f7dfa4] text-[#8a6a1e] hover:bg-[#fff6e0]'}`}>
+              {iAmAskingHelp ? '🙋 도움 요청 중 — 취소하려면 누르세요' : '🙋 도와줘 — 오늘 도움이 필요해요'}
+            </button>
+
+            <div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-5">
+              {GIGAENG.map(g => (
+                <button key={g.key} onClick={() => setRankMode(g.key)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${rankMode === g.key ? 'bg-[#ffffff] shadow-sm' : 'text-[#6d94ac]'}`}
+                  style={rankMode === g.key ? { color: g.color } : undefined}>
+                  {g.label}
                 </button>
-              )}
+              ))}
             </div>
 
-            {rankMode === 'abyss' ? (
-              abyssRows.length === 0 ? (
-                <div className="text-center py-16 text-[#6d94ac]">
-                  <p className="font-bold mb-1">아직 등록된 어비스 기록이 없습니다.</p>
-                  <p className="text-xs text-[#87a9bd]">클리어 시간과 점수를 직접 등록해 보세요.</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
-                  <table className="w-full min-w-[560px] border-collapse">
-                    <thead>
-                      <tr className="text-[11px] text-[#5d87a1] border-b border-[#cfe6f5]">
-                        <th className="text-left font-bold py-2.5 pl-1 w-14">순위</th>
-                        <th className="text-left font-bold py-2.5">캐릭터</th>
-                        <th className="text-left font-bold py-2.5 hidden sm:table-cell">던전</th>
-                        <th className="text-center font-bold py-2.5 w-20">클리어</th>
-                        <th className="text-right font-bold py-2.5 w-24">기록 점수</th>
-                        <th className="w-8"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {abyssRows.map(r => {
-                        const isMe = myProfile && r.nickname === myProfile.nickname;
-                        return (
-                          <tr key={r.id} className={`border-b border-[#eef7fe] transition-colors ${isMe ? 'bg-[#e4f4fd]' : 'hover:bg-[#f5fbff]'}`}>
-                            <td className="py-3 pl-1"><RankBadge rank={r.rank} /></td>
-                            <td className="py-3">
-                              <div className="flex items-center gap-2.5">
-                                {renderAvatar(r.game_class, "w-8 h-8")}
-                                <div className="min-w-0">
-                                  <div className={`text-sm font-bold truncate ${isMe ? 'text-[#0b7fae]' : 'text-[#0f3f57]'}`}>{r.nickname}</div>
-                                  <div className="text-[10px] text-[#87a9bd] truncate sm:hidden">{r.dungeon_name}</div>
-                                  {r.memo && <div className="text-[10px] text-[#87a9bd] truncate hidden sm:block">{r.memo}</div>}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-3 text-xs text-[#4a7d97] hidden sm:table-cell">{r.dungeon_name}</td>
-                            <td className="py-3 text-center text-sm font-bold text-[#265d75] tabular-nums">{fmtTime(r.clear_seconds)}</td>
-                            <td className="py-3 text-right text-sm font-bold text-[#0f3f57] tabular-nums">{(r.score || 0).toLocaleString()}</td>
-                            <td className="py-3 text-right">
-                              {isMe && <button onClick={() => handleDeleteRecord(r)} className="text-[#a7d1e9] hover:text-[#e0526a] p-1 rounded transition-colors"><Icons.Trash /></button>}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )
-            ) : rankRows.length === 0 ? (
+            {rankedByMode.length === 0 ? (
               <div className="text-center py-16 text-[#6d94ac]">
-                <p className="font-bold mb-1">아직 순위 데이터가 없습니다.</p>
-                <p className="text-xs text-[#87a9bd]">프로필에 인게임 캐릭터명을 등록하면 다음 월요일부터 집계됩니다.</p>
+                <p className="font-bold mb-1">아직 등록된 기갱 기록이 없습니다.</p>
+                <p className="text-xs text-[#87a9bd]">프로필에서 점수를 입력하거나, PC 자동 전송을 설정해 보세요.</p>
               </div>
             ) : (
               <div className="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
@@ -952,22 +1015,24 @@ export default function RaidScheduler() {
                   <thead>
                     <tr className="text-[11px] text-[#5d87a1] border-b border-[#cfe6f5]">
                       <th className="text-left font-bold py-2.5 pl-1 w-20">순위</th>
-                      <th className="text-left font-bold py-2.5">캐릭터명</th>
-                      <th className="text-left font-bold py-2.5 hidden sm:table-cell">클래스</th>
+                      <th className="text-left font-bold py-2.5">캐릭터</th>
                       <th className="text-center font-bold py-2.5 w-16">어비스</th>
                       <th className="text-center font-bold py-2.5 w-16">레이드</th>
-                      <th className="text-right font-bold py-2.5 pr-1 w-24">종합 점수</th>
+                      <th className="text-center font-bold py-2.5 w-16">시간</th>
+                      <th className="text-right font-bold py-2.5 pr-1 w-24">기갱 점수</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rankRows.map(r => {
-                      const isMe = myProfile && (r.nickname === myProfile.nickname || r.character_name === myProfile.character_name);
+                    {rankedByMode.map(r => {
+                      const isMe = myProfile && r.nickname === myProfile.nickname;
+                      const helped = helpNames.has(r.nickname);
                       return (
-                        <tr key={r.character_name}
-                          className={`border-b border-[#eef7fe] transition-colors ${isMe ? 'bg-[#e4f4fd]' : 'hover:bg-[#f5fbff]'}`}>
+                        <tr key={r.nickname}
+                          className={`border-b border-[#eef7fe] transition-colors ${helped ? 'bg-[#fff6e0]' : isMe ? 'bg-[#e4f4fd]' : 'hover:bg-[#f5fbff]'}`}
+                          style={helped ? { boxShadow: 'inset 3px 0 0 #f0b429' } : undefined}>
                           <td className="py-3 pl-1">
                             <div className="flex items-center gap-1.5">
-                              <RankBadge rank={r.guild_rank} />
+                              <RankBadge rank={r.rank} />
                               <RankDelta change={r.change} isNew={r.isNew} />
                             </div>
                           </td>
@@ -975,23 +1040,26 @@ export default function RaidScheduler() {
                             <div className="flex items-center gap-2.5">
                               {renderAvatar(r.game_class, "w-8 h-8")}
                               <div className="min-w-0">
-                                <div className={`text-sm font-bold truncate ${isMe ? 'text-[#0b7fae]' : 'text-[#0f3f57]'}`}>{r.character_name}</div>
-                                {r.nickname && r.nickname !== r.character_name && (
-                                  <div className="text-[10px] text-[#87a9bd] truncate">{r.nickname}</div>
+                                <div className={`text-sm font-bold truncate flex items-center gap-1.5 ${isMe ? 'text-[#0b7fae]' : 'text-[#0f3f57]'}`}>
+                                  {r.nickname}
+                                  {helped && <span className="text-[9px] font-extrabold bg-[#f0b429] text-[#4a3208] px-1.5 py-0.5 rounded">도와줘</span>}
+                                </div>
+                                {r.character_name && r.character_name !== r.nickname && (
+                                  <div className="text-[10px] text-[#87a9bd] truncate">{r.character_name}</div>
                                 )}
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 text-xs text-[#4a7d97] hidden sm:table-cell">{r.game_class || '-'}</td>
                           <td className="py-3 text-center">
                             <span className={`inline-block min-w-[30px] px-2 py-1 rounded-lg text-xs font-bold ${r.abyss > 0 ? 'bg-[#cfeafa] text-[#06465f]' : 'text-[#a7d1e9]'}`}>{r.abyss}</span>
                           </td>
                           <td className="py-3 text-center">
                             <span className={`inline-block min-w-[30px] px-2 py-1 rounded-lg text-xs font-bold ${r.raid > 0 ? 'bg-[#ffd6de] text-[#b32f47]' : 'text-[#a7d1e9]'}`}>{r.raid}</span>
                           </td>
-                          <td className="py-3 pr-1 text-right">
-                            <div className="text-sm font-bold text-[#0f3f57] tabular-nums">{(r.total_score || 0).toLocaleString()}</div>
-                            {r.official_rank && <div className="text-[10px] text-[#87a9bd]">공식 {r.official_rank}위</div>}
+                          <td className="py-3 text-center text-xs font-bold text-[#265d75] tabular-nums">{fmtTime(r.seconds)}</td>
+                          <td className="py-3 pr-1 text-right text-sm font-extrabold tabular-nums"
+                            style={{ color: GIGAENG.find(g => g.key === rankMode)?.color }}>
+                            {r.score.toLocaleString()}
                           </td>
                         </tr>
                       );
@@ -1002,9 +1070,9 @@ export default function RaidScheduler() {
             )}
 
             <p className="text-[11px] text-[#87a9bd] mt-5 leading-relaxed">
-              {rankMode === 'power'
-                ? '어비스 · 레이드 횟수는 이번 주(월~일) 일정표에서 참가 버튼을 누른 횟수입니다. 순위 변동은 지난주 순위 대비 오르내린 칸수입니다.'
-                : '개인 최고 기록만 순위에 반영됩니다. 점수가 같으면 클리어 시간이 빠른 쪽이 위로 올라갑니다.'}
+              점수가 같으면 클리어 시간이 빠른 쪽이 위로 올라갑니다.
+              어비스 · 레이드 횟수는 이번 주(월~일) 일정표에서 참가 버튼을 누른 횟수입니다.
+              순위 변동은 어제 대비 오르내린 칸수입니다.
             </p>
           </div>
         ) : activeTab === 'paper' ? (
@@ -1118,65 +1186,20 @@ export default function RaidScheduler() {
       </nav>
 
       {/* --- 모달들 (기존과 동일) --- */}
-      {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">인게임 캐릭터명</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" placeholder="랭킹에 표시할 캐릭터명" value={newCharName} onChange={(e) => setNewCharName(e.target.value)} /><p className="text-[10px] text-[#87a9bd] mt-1.5 ml-1">공식 랭킹 1,000위 안에 들면 점수가 자동으로 채워집니다.</p></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">내 점수 (선택)</label><div className="grid grid-cols-3 gap-2">{[{l:'전투력',v:newCombat,f:setNewCombat},{l:'생활력',v:newLife,f:setNewLife},{l:'매력',v:newCharm,f:setNewCharm}].map(x => (<div key={x.l}><input className="w-full bg-[#eef7fe] px-2 py-3 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="0" value={x.v} onChange={(e) => x.f(e.target.value)} /><div className="text-[10px] text-[#6d94ac] text-center mt-1">{x.l}</div></div>))}</div></div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
+      {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">인게임 캐릭터명</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" placeholder="랭킹에 표시할 캐릭터명" value={newCharName} onChange={(e) => setNewCharName(e.target.value)} /><p className="text-[10px] text-[#87a9bd] mt-1.5 ml-1">공식 랭킹 1,000위 안에 들면 점수가 자동으로 채워집니다.</p></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">어비스 기갱 (선택)</label><div className="space-y-2">{GIGAENG.map(g => (<div key={g.key} className="flex items-center gap-2"><span className="w-11 shrink-0 text-center text-[11px] font-extrabold py-2 rounded-lg" style={{ background: g.soft, color: g.color }}>{g.label}</span><input className="flex-1 min-w-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="점수" value={gig[`${g.key}_score`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_score`]: e.target.value })} /><input className="w-20 shrink-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="초" value={gig[`${g.key}_seconds`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_seconds`]: e.target.value })} /></div>))}</div><p className="text-[10px] text-[#87a9bd] mt-2 ml-1 leading-relaxed">비워두어도 됩니다. PC에서 자동 전송을 쓰면 접속할 때마다 갱신됩니다.</p>{myProfile?.ingest_token && (<div className="mt-2 bg-[#eef7fe] rounded-xl p-2.5"><div className="text-[10px] font-bold text-[#6d94ac] mb-1">내 전송 토큰</div><code className="block text-[10px] text-[#4a7d97] break-all select-all">{myProfile.ingest_token}</code></div>)}</div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
       
       {/* ★ 등록 모달 (날짜 선택 수정됨) */}
-      {isCreateModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-[#0f3f57]">일정 등록</h2><input type="date" className="w-full bg-[#eef7fe] p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-[#17a2d9] font-medium text-[#4a7d97] cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-4"><button onClick={() => setRaidType('abyss')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'abyss' ? 'bg-[#ffffff] text-[#0b7fae] shadow-sm' : 'text-[#6d94ac]'}`}>어비스</button><button onClick={() => setRaidType('raid')} className={`flex-1 py-2 rounded-lg font-bold transition-all ${raidType === 'raid' ? 'bg-[#ffffff] text-[#0b7fae] shadow-sm' : 'text-[#6d94ac]'}`}>레이드</button></div><div className="mb-6 text-left">
+      {isCreateModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-[#0f3f57]">일정 등록</h2><input type="date" className="w-full bg-[#eef7fe] p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-[#17a2d9] font-medium text-[#4a7d97] cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-4">{CALENDARS.map(c => (<button key={c.key} onClick={() => setRaidType(c.key)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${raidType === c.key ? 'bg-[#ffffff] shadow-sm' : 'text-[#6d94ac]'}`} style={raidType === c.key ? { color: c.full } : undefined}>{c.label}</button>))}</div><div className="mb-6 text-left">
         <div className="flex items-center justify-between mb-2 px-1">
           <label className="block text-xs font-bold text-[#6d94ac]">던전 선택</label>
           {/* ★ 관리자만 보이게 하려면 아래 true 를 isAdmin 으로 바꾸세요 */}
           {true && (<button onClick={openDungeonModal} className="flex items-center gap-1 text-xs font-bold text-[#0b7fae] hover:text-[#075f84] transition-colors"><Icons.Edit /> 목록 편집</button>)}
         </div>
-        <select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{dungeonList(raidType).map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select>
+        <select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{dungeonList(calOf(raidType).dungeonType).map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select>
       </div><div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-[#17a2d9] bg-[#e4f4fd] text-[#075f84]' : 'border-[#cfe6f5] text-[#6d94ac] hover:border-[#a7d1e9]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-[#17a2d9] bg-[#e4f4fd] text-[#075f84]' : 'border-[#cfe6f5] text-[#6d94ac] hover:border-[#a7d1e9]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div><div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9] transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-[#17a2d9] text-white rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">등록</button></div></div></div>)}
 
       {isWriteModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-6 text-[#0f3f57] flex items-center gap-2"><Icons.Board /> 팁 작성하기</h2><input className="w-full bg-[#eef7fe] p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all font-bold" placeholder="제목을 입력하세요" value={postTitle} onChange={e => setPostTitle(e.target.value)} autoFocus /><textarea className="w-full bg-[#eef7fe] p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all h-40 resize-none" placeholder="내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} /><div className="mb-6"><div className="flex gap-2 mb-2"><div className="flex-1"><input type="file" accept="image/*" id="img-upload" className="hidden" onChange={handleImageSelect} /><label htmlFor="img-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#e6f2fb] rounded-xl cursor-pointer hover:bg-[#d9edf9] transition-all text-xs font-bold border border-dashed border-[#a7d1e9]"><Icons.Camera /> {selectedImage ? '사진 변경' : '사진 첨부'}</label></div><div className="flex-1"><input type="file" id="file-upload" className="hidden" onChange={handleFileSelect} /><label htmlFor="file-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#e6f2fb] rounded-xl cursor-pointer hover:bg-[#d9edf9] transition-all text-xs font-bold border border-dashed border-[#a7d1e9]"><Icons.Clip /> {selectedFile ? '파일 변경' : '파일 첨부'}</label></div></div>{(previewUrl || selectedFile) && (<div className="space-y-2">{previewUrl && (<div className="relative w-full h-32 rounded-xl overflow-hidden border border-[#b9dcf0]"><img src={previewUrl} className="w-full h-full object-cover" alt="미리보기" /><button onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="absolute top-1 right-1 bg-[#0d3c52]/45 text-white rounded-full p-1"><Icons.Close /></button></div>)}{selectedFile && (<div className="flex items-center justify-between bg-[#e4f4fd] p-3 rounded-xl border border-[#cfeafa]"><div className="flex items-center gap-2 overflow-hidden"><Icons.File /><span className="text-xs font-bold text-[#075f84] truncate">{selectedFile.name}</span></div><button onClick={() => setSelectedFile(null)} className="text-[#6d94ac] hover:text-[#e0526a]"><Icons.Close /></button></div>)}</div>)}</div><div className="flex gap-3"><button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9] transition-colors">취소</button><button onClick={handleWritePost} disabled={uploading} className="flex-1 py-4 bg-[#17a2d9] text-white rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all disabled:bg-[#8fb9cf]">{uploading ? '업로드 중...' : '작성완료'}</button></div></div></div>)}
       {isDetailModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden"><div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-[#17a2d9]' : 'bg-[#ff7a8a]'}`}></div><div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-[#87a9bd] hover:text-[#e0526a] p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-[#87a9bd] hover:text-[#0f3f57] p-2 transition-all"><Icons.Close /></button></div><h2 className="text-2xl font-extrabold mb-2 pr-20 text-[#0f3f57] leading-tight">{selectedRaid?.title}</h2><div className="flex items-center gap-2 mb-6 bg-[#eef7fe] p-2 rounded-xl border border-[#cfe6f5] w-fit"><span className="text-xs text-[#6d94ac] font-bold">HOST</span>{selectedRaid?.host_avatar && renderAvatar(selectedRaid.host_avatar, "w-5 h-5")}<span className="text-sm font-bold text-[#265d75]">{selectedRaid?.host_name || '알수없음'}</span></div><div className="bg-[#eef7fe] p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-[#cfe6f5]"><p className="text-xs font-bold text-[#6d94ac] mb-4 uppercase tracking-wider flex items-center justify-between"><span>참가자 현황</span><span className={`px-2 py-1 rounded-full text-xs ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-[#ffe7eb] text-[#e0526a]' : 'bg-[#cfeafa] text-[#0b7fae]'}`}>{participants.length} / {selectedRaid?.max_members || 4}명</span></p><div className="space-y-3">{participants.length === 0 ? <p className="text-[#6d94ac] text-sm text-center py-4">참가자가 없습니다.</p> : null}{participants.map(p => (<div key={p.id} className="flex items-center justify-between bg-[#ffffff] p-3 rounded-2xl border border-[#cfe6f5] shadow-[0_4px_16px_rgba(20,110,150,0.07)]/50"><div className="flex items-center gap-4">{renderAvatar(p.game_class, "w-10 h-10")}<div className="flex flex-col"><span className="font-bold text-sm text-[#0f3f57]">{p.user_name}</span><span className="text-[10px] font-bold text-[#0b7fae] uppercase tracking-wide bg-[#e4f4fd] px-2 py-0.5 rounded-md w-fit mt-0.5">{p.game_class}</span></div></div></div>))}</div></div><div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-[#e6f2fb] text-[#265d75] rounded-2xl font-bold hover:bg-[#d9edf9] text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-[#fff1f4] text-[#e0526a] rounded-2xl font-bold hover:bg-[#ffdde4] text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={participants.length >= (selectedRaid?.max_members || 4)} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-[#8fb9cf] cursor-not-allowed' : 'bg-[#17a2d9] hover:bg-[#0e8ec0] active:scale-95'}`}>{participants.length >= (selectedRaid?.max_members || 4) ? '정원 마감' : '참가하기'}</button>)}</div></div></div>)}
-
-      {/* ★ 어비스 기록 등록 모달 */}
-      {isRecordModalOpen && (
-        <div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[10000] p-4 animate-in fade-in zoom-in-95 duration-200">
-          <div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl font-bold text-[#0f3f57]">어비스 기록 등록</h2>
-              <button onClick={() => setIsRecordModalOpen(false)} className="text-[#a7d1e9] hover:text-[#0f3f57] p-1"><Icons.Close /></button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="text-left">
-                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">던전</label>
-                <select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={recDungeon} onChange={e => setRecDungeon(e.target.value)}>
-                  {dungeonList('abyss').map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-
-              <div className="text-left">
-                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">클리어 시간</label>
-                <div className="flex items-center gap-2">
-                  <input className="flex-1 bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="분" value={recMin} onChange={e => setRecMin(e.target.value)} />
-                  <span className="font-bold text-[#87a9bd]">:</span>
-                  <input className="flex-1 bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="초" value={recSec} onChange={e => setRecSec(e.target.value)} />
-                </div>
-              </div>
-
-              <div className="text-left">
-                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">기록 점수</label>
-                <input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="0" value={recScore} onChange={e => setRecScore(e.target.value)} />
-              </div>
-
-              <div className="text-left">
-                <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">메모 (선택)</label>
-                <input className="w-full bg-[#eef7fe] p-4 rounded-2xl text-sm text-center outline-none focus:ring-2 focus:ring-[#17a2d9]" placeholder="파티 구성, 룬 세팅 등" value={recMemo} onChange={e => setRecMemo(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-7">
-              <button onClick={() => setIsRecordModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>
-              <button onClick={handleSaveRecord} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">등록</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ★ 롤링페이퍼 작성 모달 */}
       {isPaperModalOpen && (
