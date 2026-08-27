@@ -129,8 +129,8 @@ const fmtTime = (sec: number) => sec > 0 ? `${Math.floor(sec / 60)}:${String(sec
 /* 기록 시간 입력 규칙
    뒤 두 자리는 초, 앞은 분으로 읽습니다.
    '426' → 4분 26초 (266초) / '706' → 7분 6초 / '1230' → 12분 30초 / '45' → 45초 */
-const parseMMSS = (raw: string): number | null => {
-  const d = (raw || '').replace(/[^0-9]/g, '');
+const parseMMSS = (raw?: string | null): number | null => {
+  const d = String(raw ?? '').replace(/[^0-9]/g, '');
   if (!d) return null;
   if (d.length <= 2) return parseInt(d, 10);
   const sec = parseInt(d.slice(-2), 10);
@@ -566,8 +566,10 @@ export default function RaidScheduler() {
   const handleLogin = async () => { await supabase.auth.signInWithOAuth({ provider: 'google', options: { queryParams: { access_type: 'offline', prompt: 'consent' } } }); };
   const handleLogout = async () => { await supabase.auth.signOut(); window.location.reload(); };
   const handleSaveProfile = async () => {
+    try {
     if (!newNickname) return alert("입력해주세요!");
-    const toInt = (v: string) => { const n = parseInt(v.replace(/[^0-9]/g, ''), 10); return Number.isFinite(n) ? n : null; };
+    // 비워둔 칸은 undefined 로 들어오므로 안전하게 처리합니다.
+    const toInt = (v?: string | null) => { const n = parseInt(String(v ?? '').replace(/[^0-9]/g, ''), 10); return Number.isFinite(n) ? n : null; };
     const newProfile: any = {
       id: user.id, nickname: newNickname, game_class: newClass,
       character_name: newCharName.trim() || null,
@@ -598,6 +600,10 @@ export default function RaidScheduler() {
 
     // ★ 캐릭터명을 넣었으면 월요일까지 기다리지 않고 바로 순위표에 반영
     refreshRankingNow();
+    } catch (e: any) {
+      alert('저장 중 문제가 생겼습니다: ' + (e?.message || e));
+      console.error('프로필 저장 실패:', e);
+    }
   };
 
   // 순위 즉시 갱신 (공식 랭킹 수집은 건너뛰고 빠르게)
