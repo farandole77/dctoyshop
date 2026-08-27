@@ -85,6 +85,15 @@ const ensureDark = (hex: string) => {
   return c;
 };
 
+/* 진한 배경 위에 올릴 글자색.
+   같은 계열을 밝게 뽑아 쓰되, 충분히 밝아질 때까지 흰색을 더 섞습니다. */
+const ensureLight = (hex: string) => {
+  let c = mixWhite(hex, 0.78);
+  let guard = 0;
+  while (luminance(c) < 215 && guard < 12) { c = mixWhite(c, 0.18); guard++; }
+  return c;
+};
+
 /* ── 달력 4종 ──────────────────────────────────────────────
    기갱     : 파랑
    타임어택 : 빨강
@@ -361,7 +370,7 @@ export default function RaidScheduler() {
         title: label,
         backgroundColor: bg,
         borderColor: 'transparent',
-        textColor: solid ? '#ffffff' : mixBlack(base, 0.55),
+        textColor: solid ? ensureLight(base) : mixBlack(base, 0.55),
         extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title, blocked_slots: ev.blocked_slots || [], is_closed: !!ev.is_closed },
       };
     });
