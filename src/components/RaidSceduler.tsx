@@ -53,7 +53,7 @@ const isAbyssTitle = (title: string) => title.includes('어비스') || title.inc
 
 /* ── 달력 3종 ──────────────────────────────────────────────
    gigaeng : 어비스 기갱용 (지옥2)   — 파랑
-   explore : 어비스 탐색 및 숙제      — 청록
+   explore : 어비스 타임어택 및 숙제      — 청록
    raid    : 레이드                   — 호박색                        */
 const CALENDARS = [
   {
@@ -196,7 +196,7 @@ export default function RaidScheduler() {
   
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [newNickname, setNewNickname] = useState('');
-  const [newClass, setNewClass] = useState(GAME_CLASSES[0]);
+  const [newClass, setNewClass] = useState(GAME_CLASSES[0]);  // 목록은 classNames() 가 DB 우선으로 돌려줍니다
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   const [raidTitle, setRaidTitle] = useState('');
@@ -238,6 +238,15 @@ export default function RaidScheduler() {
 
   // ★ 던전 목록 관리용 상태
   const [dungeons, setDungeons] = useState<any[]>([]);
+
+  // ★ 직업 목록 (DB 우선, 없으면 코드의 기본값)
+  const [gameClasses, setGameClasses] = useState<any[]>([]);
+  const [isClassModalOpen, setIsClassModalOpen] = useState(false);
+  const [newClassName, setNewClassName] = useState('');
+  const [newClassIcon, setNewClassIcon] = useState<File | null>(null);
+  const [editingClassId, setEditingClassId] = useState<number | null>(null);
+  const [editingClassName, setEditingClassName] = useState('');
+  const [classBusy, setClassBusy] = useState(false);
   const [isDungeonModalOpen, setIsDungeonModalOpen] = useState(false);
   const [dungeonTab, setDungeonTab] = useState<'abyss' | 'raid'>('abyss');
   const [newDungeonName, setNewDungeonName] = useState('');
@@ -325,6 +334,89 @@ export default function RaidScheduler() {
     await fetchRaids();
   };
 
+  // ================= ★ 직업 목록 관리 =================
+  const fetchGameClasses = async () => {
+    const { data, error } = await supabase
+      .from('game_classes').select('*')
+      .order('sort_order', { ascending: true }).order('id', { ascending: true });
+    if (error) { console.error('직업 목록 조회 실패(기본값 사용):', error.message); return; }
+    if (data) setGameClasses(data);
+  };
+
+  const uploadClassIcon = async (file: File) => {
+    const ext = file.name.split('.').pop();
+    const path = `class-icons/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from('images').upload(path, file);
+    if (error) throw error;
+    return supabase.storage.from('images').getPublicUrl(path).data.publicUrl;
+  };
+
+  const handleAddClass = async () => {
+    const name = newClassName.trim();
+    if (!name) return alert('직업 이름을 입력해주세요.');
+    if (gameClasses.some(c => c.name === name)) return alert('이미 같은 직업이 있습니다.');
+    setClassBusy(true);
+    try {
+      let iconUrl: string | null = null;
+      if (newClassIcon) iconUrl = await uploadClassIcon(newClassIcon);
+      const maxOrder = gameClasses.reduce((m, c) => Math.max(m, c.sort_order ?? 0), 0);
+      const { error } = await supabase.from('game_classes')
+        .insert([{ name, icon_url: iconUrl, sort_order: maxOrder + 1 }]);
+      if (error) throw error;
+      setNewClassName(''); setNewClassIcon(null);
+      await fetchGameClasses();
+    } catch (e: any) {
+      alert('추가 실패: ' + e.message);
+    } finally { setClassBusy(false); }
+  };
+
+  const handleRenameClass = async (row: any) => {
+    const name = editingClassName.trim();
+    if (!name) return alert('이름을 입력해주세요.');
+    if (name === row.name) { setEditingClassId(null); return; }
+    if (gameClasses.some(c => c.name === name)) return alert('이미 같은 직업이 있습니다.');
+
+    const { error } = await supabase.from('game_classes').update({ name }).eq('id', row.id);
+    if (error) return alert('수정 실패: ' + error.message);
+
+    // 이 직업을 쓰던 사람들의 표기도 함께 바꿀지
+    if (confirm(`'${row.name}' 직업을 쓰던 길드원의 표기도 '${name}' 으로 바꿀까요?`)) {
+      await supabase.from('profiles').update({ game_class: name }).eq('game_class', row.name);
+      await fetchAllProfiles();
+      if (myProfile?.game_class === row.name) setMyProfile({ ...myProfile, game_class: name });
+    }
+    setEditingClassId(null); setEditingClassName('');
+    await fetchGameClasses();
+  };
+
+  const handleChangeClassIcon = async (row: any, file: File) => {
+    setClassBusy(true);
+    try {
+      const iconUrl = await uploadClassIcon(file);
+      const { error } = await supabase.from('game_classes').update({ icon_url: iconUrl }).eq('id', row.id);
+      if (error) throw error;
+      await fetchGameClasses();
+    } catch (e: any) {
+      alert('아이콘 변경 실패: ' + e.message);
+    } finally { setClassBusy(false); }
+  };
+
+  const handleDeleteClass = async (row: any) => {
+    if (!confirm(`'${row.name}' 직업을 목록에서 지울까요?\n(이미 이 직업으로 설정한 길드원은 그대로 남습니다)`)) return;
+    const { error } = await supabase.from('game_classes').delete().eq('id', row.id);
+    if (error) return alert('삭제 실패: ' + error.message);
+    await fetchGameClasses();
+  };
+
+  const handleSeedClasses = async () => {
+    if (!confirm('기본 직업 목록을 DB에 저장할까요?\n(최초 1회만 실행하세요)')) return;
+    const rows = Object.entries(CLASS_IMAGES).map(([name, icon_url], i) => ({ name, icon_url, sort_order: i + 1 }));
+    const { error } = await supabase.from('game_classes').insert(rows);
+    if (error) return alert('저장 실패: ' + error.message);
+    await fetchGameClasses();
+  };
+  // ====================================================
+
   const initialize = async () => {
     setIsLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
@@ -333,6 +425,7 @@ export default function RaidScheduler() {
     await fetchRaidCounts();
     await fetchHelpRequests();
     await fetchDungeons();
+    await fetchGameClasses();
     setIsLoading(false);
   };
 
@@ -361,6 +454,20 @@ export default function RaidScheduler() {
       mulgil_score: toInt(gig.mulgil_score), mulgil_seconds: toInt(gig.mulgil_seconds),
       records_updated_at: new Date().toISOString(),
     };
+    // ★ 닉네임이 바뀌었으면 흩어진 이름을 먼저 한꺼번에 정리합니다.
+    const oldNick = myProfile?.nickname;
+    if (oldNick && oldNick !== newNickname) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return alert('로그인이 만료되었습니다. 새로고침 후 다시 시도해주세요.');
+      const res = await fetch('/api/profile/rename', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldName: oldNick, newName: newNickname }),
+      });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) return alert('닉네임 변경 실패: ' + (out.error || res.status));
+    }
+
     const { error } = await supabase.from('profiles').upsert([newProfile]);
     if (error) return alert('저장 실패: ' + error.message);
 
@@ -561,7 +668,14 @@ export default function RaidScheduler() {
   const handleLeave = async () => { const isHost = selectedRaid.created_by_email === user.email; if (isHost && participants.length <= 1) { if (!confirm("파티가 해체됩니다. 삭제하시겠습니까?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); } else { if (!confirm("취소?")) return; await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email); refreshParticipants(selectedRaid.id); } };
   const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
   const refreshParticipants = async (raidId: any) => { const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setParticipants(data || []); await fetchRaidCounts(); };
-  const renderAvatar = (gameClass: string, size = "w-10 h-10") => { let imagePath = CLASS_IMAGES[gameClass] || "/class-icons/default.png"; return <img src={imagePath} className={`${size} rounded-full object-cover border border-[#b9dcf0] bg-[#ffffff]`} alt={gameClass} onError={(e) => { (e.target as HTMLImageElement).src = "/class-icons/default.png"; }} />; };
+  // DB에 등록된 직업이 있으면 그 아이콘을, 없으면 코드의 기본 아이콘을 씁니다.
+  const classIconOf = (gameClass: string) =>
+    gameClasses.find(c => c.name === gameClass)?.icon_url || CLASS_IMAGES[gameClass] || "/class-icons/default.png";
+
+  const classNames = (): string[] =>
+    gameClasses.length > 0 ? gameClasses.map(c => c.name) : Object.keys(CLASS_IMAGES);
+
+  const renderAvatar = (gameClass: string, size = "w-10 h-10") => { let imagePath = classIconOf(gameClass); return <img src={imagePath} className={`${size} rounded-full object-cover border border-[#b9dcf0] bg-[#ffffff]`} alt={gameClass} onError={(e) => { (e.target as HTMLImageElement).src = "/class-icons/default.png"; }} />; };
   const handleAddToCalendar = () => { if (!selectedRaid) return; const title = encodeURIComponent(`[길드] ${selectedRaid.title}`); const details = encodeURIComponent("환생 일정"); const dateStr = selectedRaid.date.replace(/-/g, ""); const dates = `${dateStr}/${dateStr}`; const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`; window.open(url, '_blank'); };
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-xl font-bold text-[#6d94ac]">로딩중...</div>;
@@ -1242,7 +1356,7 @@ export default function RaidScheduler() {
           </div>
         ) : (
           // 관리자 탭 (기존과 동일)
-          <div className="bg-[#ffffff] p-6 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-full"><div className="flex items-center justify-between mb-6"><h3 className="text-xl font-bold text-[#0f3f57] flex items-center gap-2"><Icons.Admin /> 회원 관리</h3><button onClick={openDungeonModal} className="flex items-center gap-2 bg-[#17a2d9] text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0e8ec0] transition-all shadow-md active:scale-95"><Icons.Edit /> 던전 목록 관리</button></div><div className="space-y-4">{allProfiles.map(member => (<div key={member.id} className="flex items-center justify-between bg-[#eef7fe] p-4 rounded-2xl border border-[#cfe6f5] shadow-[0_4px_16px_rgba(20,110,150,0.07)]"><div className="flex items-center gap-4">{renderAvatar(member.game_class, "w-10 h-10")}<div><div className="font-bold text-[#0f3f57] flex items-center gap-2">{member.nickname} {member.role === 'admin' && <span className="bg-[#17a2d9] text-white text-[10px] px-2 py-0.5 rounded-full">ADMIN</span>}</div><div className="text-xs text-[#5d87a1]">{member.game_class}</div></div></div>{member.id !== user.id && member.role !== 'admin' && (<button onClick={() => handleDeleteMember(member.id, member.nickname)} className="px-4 py-2 bg-[#ffe7eb] text-[#e0526a] rounded-xl text-xs font-bold hover:bg-[#ffd6de] transition-all">강퇴</button>)}</div>))}</div></div>
+          <div className="bg-[#ffffff] p-6 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-full"><div className="flex items-center justify-between mb-6"><h3 className="text-xl font-bold text-[#0f3f57] flex items-center gap-2"><Icons.Admin /> 회원 관리</h3><div className="flex gap-2"><button onClick={() => setIsClassModalOpen(true)} className="flex items-center gap-2 bg-[#ffffff] border border-[#cfe6f5] text-[#265d75] px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-[#eef7fe] transition-all active:scale-95"><Icons.Edit /> 직업 목록 관리</button><button onClick={openDungeonModal} className="flex items-center gap-2 bg-[#17a2d9] text-white px-4 py-2.5 rounded-xl font-bold text-sm hover:bg-[#0e8ec0] transition-all shadow-md active:scale-95"><Icons.Edit /> 던전 목록 관리</button></div></div><div className="space-y-4">{allProfiles.map(member => (<div key={member.id} className="flex items-center justify-between bg-[#eef7fe] p-4 rounded-2xl border border-[#cfe6f5] shadow-[0_4px_16px_rgba(20,110,150,0.07)]"><div className="flex items-center gap-4">{renderAvatar(member.game_class, "w-10 h-10")}<div><div className="font-bold text-[#0f3f57] flex items-center gap-2">{member.nickname} {member.role === 'admin' && <span className="bg-[#17a2d9] text-white text-[10px] px-2 py-0.5 rounded-full">ADMIN</span>}</div><div className="text-xs text-[#5d87a1]">{member.game_class}</div></div></div>{member.id !== user.id && member.role !== 'admin' && (<button onClick={() => handleDeleteMember(member.id, member.nickname)} className="px-4 py-2 bg-[#ffe7eb] text-[#e0526a] rounded-xl text-xs font-bold hover:bg-[#ffd6de] transition-all">강퇴</button>)}</div>))}</div></div>
         )}
       </main>
 
@@ -1257,7 +1371,7 @@ export default function RaidScheduler() {
       </nav>
 
       {/* --- 모달들 (기존과 동일) --- */}
-      {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{GAME_CLASSES.map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">인게임 캐릭터명</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" placeholder="랭킹에 표시할 캐릭터명" value={newCharName} onChange={(e) => setNewCharName(e.target.value)} /><p className="text-[10px] text-[#87a9bd] mt-1.5 ml-1">공식 랭킹 1,000위 안에 들면 점수가 자동으로 채워집니다.</p></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">어비스 기갱 (선택)</label><div className="space-y-2">{GIGAENG.map(g => (<div key={g.key} className="flex items-center gap-2"><span className="w-11 shrink-0 text-center text-[11px] font-extrabold py-2 rounded-lg" style={{ background: g.soft, color: g.color }}>{g.label}</span><input className="flex-1 min-w-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="점수" value={gig[`${g.key}_score`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_score`]: e.target.value })} /><input className="w-20 shrink-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="초" value={gig[`${g.key}_seconds`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_seconds`]: e.target.value })} /></div>))}</div><p className="text-[10px] text-[#87a9bd] mt-2 ml-1 leading-relaxed">비워두어도 됩니다. PC에서 자동 전송을 쓰면 접속할 때마다 갱신됩니다.</p>{myProfile?.ingest_token && (<div className="mt-2 bg-[#eef7fe] rounded-xl p-2.5"><div className="text-[10px] font-bold text-[#6d94ac] mb-1">내 전송 토큰</div><code className="block text-[10px] text-[#4a7d97] break-all select-all">{myProfile.ingest_token}</code></div>)}</div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
+      {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{classNames().map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">인게임 캐릭터명</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" placeholder="랭킹에 표시할 캐릭터명" value={newCharName} onChange={(e) => setNewCharName(e.target.value)} /><p className="text-[10px] text-[#87a9bd] mt-1.5 ml-1">공식 랭킹 1,000위 안에 들면 점수가 자동으로 채워집니다.</p></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">어비스 기갱 (선택)</label><div className="space-y-2">{GIGAENG.map(g => (<div key={g.key} className="flex items-center gap-2"><span className="w-11 shrink-0 text-center text-[11px] font-extrabold py-2 rounded-lg" style={{ background: g.soft, color: g.color }}>{g.label}</span><input className="flex-1 min-w-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="점수" value={gig[`${g.key}_score`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_score`]: e.target.value })} /><input className="w-20 shrink-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="초" value={gig[`${g.key}_seconds`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_seconds`]: e.target.value })} /></div>))}</div><p className="text-[10px] text-[#87a9bd] mt-2 ml-1 leading-relaxed">비워두어도 됩니다. PC에서 자동 전송을 쓰면 접속할 때마다 갱신됩니다.</p>{myProfile?.ingest_token && (<div className="mt-2 bg-[#eef7fe] rounded-xl p-2.5"><div className="text-[10px] font-bold text-[#6d94ac] mb-1">내 전송 토큰</div><code className="block text-[10px] text-[#4a7d97] break-all select-all">{myProfile.ingest_token}</code></div>)}</div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
       
       {/* ★ 등록 모달 (날짜 선택 수정됨) */}
       {isCreateModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-[#0f3f57]">일정 등록</h2><input type="date" className="w-full bg-[#eef7fe] p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-[#17a2d9] font-medium text-[#4a7d97] cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-4">{CALENDARS.map(c => (<button key={c.key} onClick={() => setRaidType(c.key)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${raidType === c.key ? 'bg-[#ffffff] shadow-sm' : 'text-[#6d94ac]'}`} style={raidType === c.key ? { color: c.full } : undefined}>{c.label}</button>))}</div><div className="mb-6 text-left">
@@ -1374,6 +1488,79 @@ export default function RaidScheduler() {
             <div className="flex gap-3 p-6 pt-0">
               <button onClick={() => { setIsPaperModalOpen(false); setEditingPaperId(null); }} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>
               <button onClick={handleSavePaper} className="flex-1 bg-[#ff7a8a] text-white py-4 rounded-2xl font-bold hover:bg-[#e0526a] shadow-lg transition-all">{editingPaperId ? '수정 완료' : '남기기'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ★ 직업 목록 관리 모달 (관리자 전용) */}
+      {isClassModalOpen && (
+        <div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[10000] p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-[#0f3f57]">직업 목록 관리</h2>
+              <button onClick={() => setIsClassModalOpen(false)} className="text-[#a7d1e9] hover:text-[#0f3f57] p-1"><Icons.Close /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto -mx-1 px-1 mb-4">
+              {gameClasses.length === 0 ? (
+                <div className="text-center py-8 bg-[#eef7fe] rounded-2xl border border-dashed border-[#cfe6f5]">
+                  <p className="text-sm text-[#5d87a1] mb-1 font-bold">아직 DB에 저장된 직업이 없습니다.</p>
+                  <p className="text-xs text-[#87a9bd] mb-4">지금은 코드에 있는 기본 목록이 쓰이고 있습니다.</p>
+                  <button onClick={handleSeedClasses} className="px-5 py-3 bg-[#17a2d9] text-white rounded-xl font-bold text-sm hover:bg-[#0e8ec0]">기본 목록 불러오기</button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {gameClasses.map(row => (
+                    <div key={row.id} className="flex items-center gap-2 bg-[#eef7fe] p-2 rounded-2xl border border-[#cfe6f5]">
+                      <label className="shrink-0 cursor-pointer relative group" title="눌러서 아이콘 바꾸기">
+                        <img src={row.icon_url || '/class-icons/default.png'} alt={row.name}
+                          className="w-10 h-10 rounded-full object-cover border border-[#b9dcf0] bg-[#ffffff]"
+                          onError={(e) => { (e.target as HTMLImageElement).src = '/class-icons/default.png'; }} />
+                        <span className="absolute inset-0 rounded-full bg-[#0d3c52]/0 group-hover:bg-[#0d3c52]/45 flex items-center justify-center text-white text-[9px] font-bold opacity-0 group-hover:opacity-100 transition-all">변경</span>
+                        <input type="file" accept="image/*" className="hidden"
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleChangeClassIcon(row, f); e.target.value = ''; }} />
+                      </label>
+
+                      {editingClassId === row.id ? (
+                        <>
+                          <input className="flex-1 min-w-0 bg-[#ffffff] px-3 py-2 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]"
+                            value={editingClassName} onChange={e => setEditingClassName(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleRenameClass(row); if (e.key === 'Escape') setEditingClassId(null); }} autoFocus />
+                          <button onClick={() => handleRenameClass(row)} className="px-3 py-2 bg-[#17a2d9] text-white rounded-xl text-xs font-bold shrink-0">저장</button>
+                          <button onClick={() => setEditingClassId(null)} className="px-3 py-2 bg-[#e6f2fb] text-[#4a7d97] rounded-xl text-xs font-bold shrink-0">취소</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-1 px-1 font-bold text-sm text-[#0f3f57] truncate">{row.name}</span>
+                          <button onClick={() => { setEditingClassId(row.id); setEditingClassName(row.name); }} className="p-2 text-[#87a9bd] hover:text-[#0b7fae] hover:bg-[#ffffff] rounded-lg shrink-0" title="이름 수정"><Icons.Edit /></button>
+                          <button onClick={() => handleDeleteClass(row)} className="p-2 text-[#87a9bd] hover:text-[#e0526a] hover:bg-[#ffffff] rounded-lg shrink-0" title="삭제"><Icons.Trash /></button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-[#cfe6f5] pt-4">
+              <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">새 직업 추가</label>
+              <div className="flex gap-2 items-center">
+                <label className="shrink-0 w-12 h-12 rounded-xl border-2 border-dashed border-[#cfe6f5] flex items-center justify-center cursor-pointer hover:border-[#17a2d9] overflow-hidden" title="아이콘 선택">
+                  {newClassIcon
+                    ? <img src={URL.createObjectURL(newClassIcon)} alt="" className="w-full h-full object-cover" />
+                    : <span className="text-[#a7d1e9] text-xl leading-none">+</span>}
+                  <input type="file" accept="image/*" className="hidden" onChange={e => setNewClassIcon(e.target.files?.[0] || null)} />
+                </label>
+                <input className="flex-1 min-w-0 bg-[#eef7fe] px-4 py-3 rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]"
+                  placeholder="예) 마검사" value={newClassName} onChange={e => setNewClassName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddClass(); }} />
+                <button onClick={handleAddClass} disabled={classBusy}
+                  className={`px-5 py-3 rounded-2xl font-bold text-sm shadow-md transition-all shrink-0 ${classBusy ? 'bg-[#8fb9cf] text-white cursor-wait' : 'bg-[#17a2d9] text-white hover:bg-[#0e8ec0]'}`}>
+                  {classBusy ? '...' : '추가'}
+                </button>
+              </div>
+              <p className="text-[10px] text-[#87a9bd] mt-2 ml-1">아이콘은 정사각형 이미지가 가장 잘 어울립니다. 비워두면 기본 아이콘이 쓰입니다.</p>
             </div>
           </div>
         </div>
