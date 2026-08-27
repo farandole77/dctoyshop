@@ -119,8 +119,11 @@ select option { background: var(--surface); color: var(--text); }
   box-shadow: inset 0 0 0 1px rgba(15, 63, 87, 0.12);
   cursor: pointer;
 }
-.fc-event:hover { filter: brightness(0.97) saturate(1.15); }
-.fc-event-title, .fc-event-time { color: var(--text); }
+.fc-event:hover { filter: brightness(1.08) saturate(1.05); }
+/* 일정마다 지정한 글자색을 그대로 따르게 합니다.
+   (여기서 색을 고정하면 모집완료/마감 칩의 밝은 글씨가 묻힙니다) */
+.fc-event-title, .fc-event-time, .fc-event-title-container { color: inherit; }
+.fc-event .fc-event-main { color: inherit; }
 .fc-daygrid-more-link { color: var(--accent-hi) !important; font-size: 0.72rem; font-weight: 700; }
 
 /* 이전 / 다음 / 오늘 버튼 */
