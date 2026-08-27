@@ -82,6 +82,10 @@ const GIGAENG = [
   { key: 'mulgil',  label: '물길', color: '#1c86b8', soft: '#dcefF9' },
 ];
 
+// 오늘 (KST) — 조기 반환 위에서도 쓰이므로 모듈 최상단에 둡니다.
+const todayKST = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().split('T')[0];
+const fmtTime = (sec: number) => sec > 0 ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : '-';
+
 const calOf = (key: string) => CALENDARS.find(c => c.key === key) || CALENDARS[0];
 
 const Icons = {
@@ -294,6 +298,14 @@ export default function RaidScheduler() {
   useEffect(() => {
     if (isCreateModalOpen) setSelectedDungeon(dungeonList(calOf(raidType).dungeonType)[0] || '');
   }, [raidType, isCreateModalOpen, dungeons]);
+
+  const fetchHelpRequests = async () => {
+    const { data } = await supabase
+      .from('help_requests').select('*')
+      .eq('request_date', todayKST())
+      .order('created_at', { ascending: false });
+    setHelpRows(data || []);
+  };
 
   const initialize = async () => {
     setIsLoading(true);
@@ -700,8 +712,6 @@ export default function RaidScheduler() {
   // ====================================================
 
   // ================= ★ 길드원 순위 (어비스 기갱) =================
-  const todayKST = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().split('T')[0];
-  const fmtTime = (sec: number) => sec > 0 ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : '-';
 
   const fetchGuildRanking = async () => {
     // 오늘 스냅샷 (없으면 가장 최근 날짜)
@@ -790,14 +800,6 @@ export default function RaidScheduler() {
 
   // ================= ★ 도와줘 =================
   //  오늘 도움을 요청한 사람들. 순위표에서 그 사람 줄이 강조됩니다.
-  const fetchHelpRequests = async () => {
-    const { data } = await supabase
-      .from('help_requests').select('*')
-      .eq('request_date', todayKST())
-      .order('created_at', { ascending: false });
-    setHelpRows(data || []);
-  };
-
   const helpNames = new Set(helpRows.map(h => h.nickname));
   const iAmAskingHelp = !!myProfile && helpNames.has(myProfile.nickname);
 
