@@ -868,19 +868,25 @@ export default function RaidScheduler() {
           <span className="text-[10px] font-extrabold bg-[#f0b429] text-[#4a3208] px-2 py-1 rounded">🙋 도와줘</span>
           <span className="text-[11px] text-[#8a6a1e]">오늘 도움을 기다리는 길드원</span>
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-3">
           {helpRows.map(h => {
             const r = rankRows.find(x => x.nickname === h.nickname);
             return (
-              <div key={h.id} className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-extrabold text-[#5b420a]">{h.nickname}</span>
-                {r && GIGAENG.map(g => (
-                  <span key={g.key} className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                    style={{ background: g.soft, color: g.color }}>
-                    {g.label} {fmtTime(r[`${g.key}_seconds`] || 0)}
-                  </span>
-                ))}
-                {h.message && <span className="text-[11px] text-[#8a6a1e] truncate">— {h.message}</span>}
+              <div key={h.id}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-extrabold text-[#5b420a]">{h.nickname}</span>
+                  {r && GIGAENG.map(g => (
+                    <span key={g.key} className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                      style={{ background: g.soft, color: g.color }}>
+                      {g.label} {fmtTime(r[`${g.key}_seconds`] || 0)}
+                    </span>
+                  ))}
+                </div>
+                {h.message && (
+                  <p className="text-[22px] leading-snug font-extrabold text-[#7a5a0c] mt-1 mb-1 break-words">
+                    “{h.message}”
+                  </p>
+                )}
               </div>
             );
           })}
