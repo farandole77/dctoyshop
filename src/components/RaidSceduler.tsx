@@ -224,6 +224,7 @@ export default function RaidScheduler() {
   const [pMsg, setPMsg] = useState('');
   const [pPoint, setPPoint] = useState('');
   const [pAnon, setPAnon] = useState(false);
+  const [editingPaperId, setEditingPaperId] = useState<number | null>(null);
 
   // ★ 길드원 순위
   const rankSelfHealed = useRef(false);   // 자동 갱신은 세션당 한 번만
@@ -276,7 +277,8 @@ export default function RaidScheduler() {
       const cal = calOf(ev.calendar_type);
       const names = raidNames[ev.id] || [];
       const max = ev.max_members || 4;
-      const isFull = names.length >= max;
+      const blocked = (ev.blocked_slots || []).length;
+      const isFull = names.length + blocked >= max;
       const who = names.length > 0 ? names.join(', ') : '아직 없음';
       return {
         ...ev,
@@ -284,7 +286,7 @@ export default function RaidScheduler() {
         backgroundColor: isFull ? cal.full : cal.open,
         borderColor: 'transparent',
         textColor: isFull ? cal.fullText : cal.openText,
-        extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title },
+        extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title, blocked_slots: ev.blocked_slots || [] },
       };
     });
 
@@ -305,6 +307,22 @@ export default function RaidScheduler() {
       .eq('request_date', todayKST())
       .order('created_at', { ascending: false });
     setHelpRows(data || []);
+  };
+
+  // ★ 고스트라이더 — 남는 자리를 잠가서 모집을 마감합니다.
+  const toggleSlotBlock = async (slotIndex: number) => {
+    if (!selectedRaid) return;
+    const canEdit = isAdmin || selectedRaid.created_by_email === user.email;
+    if (!canEdit) return alert('파티장만 자리를 잠글 수 있습니다.');
+
+    const cur: number[] = selectedRaid.blocked_slots || [];
+    const next = cur.includes(slotIndex) ? cur.filter(i => i !== slotIndex) : [...cur, slotIndex].sort((a, b) => a - b);
+
+    const { error } = await supabase.from('raids').update({ blocked_slots: next }).eq('id', selectedRaid.id);
+    if (error) return alert('변경 실패: ' + error.message);
+
+    setSelectedRaid({ ...selectedRaid, blocked_slots: next });
+    await fetchRaids();
   };
 
   const initialize = async () => {
@@ -391,6 +409,7 @@ export default function RaidScheduler() {
         id: raid.id, title: raid.title, date: raid.start_time.split('T')[0],
         created_by_email: raid.created_by_email, host_name: raid.host_name, host_avatar: raid.host_avatar,
         max_members: raid.max_members,
+        blocked_slots: raid.blocked_slots || [],
         calendar_type: raid.calendar_type || (isAbyssTitle(raid.title) ? 'gigaeng' : 'raid'),
       })));
     }
@@ -419,6 +438,7 @@ export default function RaidScheduler() {
       id: raid.id, title: raid.title, date: raid.date,
       created_by_email: raid.created_by_email, max_members: raid.max_members || 4,
       host_name: raid.host_name, host_avatar: raid.host_avatar,
+      blocked_slots: raid.blocked_slots || [],
     });
     setParticipants(data || []);
     setIsDetailModalOpen(true);
@@ -536,7 +556,7 @@ export default function RaidScheduler() {
     if (newRaid) { await supabase.from('participants').insert([{ raid_id: newRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); }
     setRaidTitle(''); setMaxMembers(4); setIsCreateModalOpen(false); fetchRaids(); 
   };
-  const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.extendedProps.realTitle || arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar }); setParticipants(data || []); setIsDetailModalOpen(true); };
+  const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.extendedProps.realTitle || arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar, blocked_slots: arg.event.extendedProps.blocked_slots || [] }); setParticipants(data || []); setIsDetailModalOpen(true); };
   const handleJoin = async () => { if (!myProfile) return alert('프로필 필요'); const limit = selectedRaid.max_members || 4; if (participants.length >= limit) return alert(`🚫 정원이 꽉 찼습니다! (최대 ${limit}명)`); await supabase.from('participants').insert([{ raid_id: selectedRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); refreshParticipants(selectedRaid.id); };
   const handleLeave = async () => { const isHost = selectedRaid.created_by_email === user.email; if (isHost && participants.length <= 1) { if (!confirm("파티가 해체됩니다. 삭제하시겠습니까?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); } else { if (!confirm("취소?")) return; await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email); refreshParticipants(selectedRaid.id); } };
   const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
@@ -546,6 +566,24 @@ export default function RaidScheduler() {
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-xl font-bold text-[#6d94ac]">로딩중...</div>;
   if (!user) return <div className="min-h-screen flex flex-col justify-center items-center p-4"><div className="bg-[#ffffff] p-10 rounded-[2rem] border border-[#cfe6f5] text-center max-w-sm w-full relative overflow-hidden"><div className="absolute -top-24 -left-16 w-72 h-72 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(23,162,217,.22), transparent 65%)" }} /><div className="relative"><h1 className="text-3xl font-extrabold mb-8 text-[#164a63]">환생</h1><button onClick={handleLogin} className="w-full bg-transparent border border-[#17a2d9] p-4 rounded-2xl font-bold flex justify-center items-center gap-3 hover:bg-[#17a2d9]/12 active:bg-[#17a2d9]/22 transition-all text-[#0b7fae]"><span className="text-2xl">G</span> <span>구글 아이디로 시작</span></button><p className="text-[11px] text-[#87a9bd] mt-4">길드원만 가입할 수 있습니다</p></div></div></div>;
+
+  // ★ 상세 모달의 자리 배치 계산
+  //    4인이면 2x2, 8인이면 4x2. 참가자를 잠기지 않은 칸에 순서대로 앉힙니다.
+  const slotState = (() => {
+    const max = selectedRaid?.max_members || 4;
+    const blocked: number[] = selectedRaid?.blocked_slots || [];
+    const cols = max <= 4 ? 2 : Math.ceil(max / 2);
+
+    let seat = 0;
+    const slots = Array.from({ length: max }, (_, index) => {
+      if (blocked.includes(index)) return { index, kind: 'blocked' as const, member: null };
+      const member = participants[seat];
+      if (member) { seat++; return { index, kind: 'member' as const, member }; }
+      return { index, kind: 'empty' as const, member: null };
+    });
+
+    return { max, cols, slots, isFull: participants.length + blocked.length >= max };
+  })();
 
   const isJoined = participants.some(p => p.user_email === user.email);
   const isMyRaid = isAdmin || (selectedRaid?.created_by_email === user.email);
@@ -830,26 +868,48 @@ export default function RaidScheduler() {
 
   const openPaperModal = (to?: string) => {
     if (!myProfile) return alert('먼저 프로필을 설정해주세요.');
+    setEditingPaperId(null);
     setPTo(to || paperTarget || '');
     setPMood('💌'); setPTitle(''); setPMsg(''); setPPoint(''); setPAnon(false);
+    setIsPaperModalOpen(true);
+  };
+
+  // ★ 내가 쓴 롤링페이퍼 고치기
+  const openPaperEdit = (row: any) => {
+    setEditingPaperId(row.id);
+    setPTo(row.to_nickname);
+    setPMood(row.mood || '💌');
+    setPTitle(row.title || '');
+    setPMsg(row.message || '');
+    setPPoint(row.point || '');
+    setPAnon(!!row.is_anonymous);
     setIsPaperModalOpen(true);
   };
 
   const handleSavePaper = async () => {
     if (!pTo) return alert('누구에게 쓸지 골라주세요.');
     if (!pMsg.trim()) return alert('메시지를 입력해주세요.');
-    const { error } = await supabase.from('rolling_papers').insert([{
+
+    const payload = {
       to_nickname: pTo,
-      author_id: user.id,
       author_name: pAnon ? '익명' : myProfile.nickname,
       is_anonymous: pAnon,
       mood: pMood,
       title: pTitle.trim() || null,
       message: pMsg.trim(),
       point: pPoint.trim() || null,
-    }]);
+    };
+
+    const { error } = editingPaperId
+      ? await supabase.from('rolling_papers')
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq('id', editingPaperId)
+      : await supabase.from('rolling_papers')
+          .insert([{ ...payload, author_id: user.id }]);
+
     if (error) return alert('저장 실패: ' + error.message);
     setIsPaperModalOpen(false);
+    setEditingPaperId(null);
     await fetchPapers();
   };
 
@@ -1131,7 +1191,10 @@ export default function RaidScheduler() {
                         <span className="text-xs font-bold text-[#b32f47] truncate">To. {p.to_nickname}</span>
                       </div>
                       {p.author_id === user.id && (
-                        <button onClick={() => handleDeletePaper(p)} className="text-[#e8a5b0] hover:text-[#b32f47] p-1 shrink-0"><Icons.Trash /></button>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button onClick={() => openPaperEdit(p)} title="수정" className="text-[#e8a5b0] hover:text-[#b32f47] p-1"><Icons.Edit /></button>
+                          <button onClick={() => handleDeletePaper(p)} title="삭제" className="text-[#e8a5b0] hover:text-[#b32f47] p-1"><Icons.Trash /></button>
+                        </div>
                       )}
                     </div>
                     <div className="p-4">
@@ -1144,7 +1207,9 @@ export default function RaidScheduler() {
                         <span className="text-[11px] font-bold text-[#4a7d97]">
                           From. {p.is_anonymous ? '익명 💗' : p.author_name}
                         </span>
-                        <span className="text-[10px] text-[#87a9bd]">{(p.created_at || '').split('T')[0]}</span>
+                        <span className="text-[10px] text-[#87a9bd]">
+                          {(p.created_at || '').split('T')[0]}{p.updated_at ? ' (수정됨)' : ''}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1201,14 +1266,63 @@ export default function RaidScheduler() {
       </div><div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-[#17a2d9] bg-[#e4f4fd] text-[#075f84]' : 'border-[#cfe6f5] text-[#6d94ac] hover:border-[#a7d1e9]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-[#17a2d9] bg-[#e4f4fd] text-[#075f84]' : 'border-[#cfe6f5] text-[#6d94ac] hover:border-[#a7d1e9]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div><div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9] transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-[#17a2d9] text-white rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">등록</button></div></div></div>)}
 
       {isWriteModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-6 text-[#0f3f57] flex items-center gap-2"><Icons.Board /> 팁 작성하기</h2><input className="w-full bg-[#eef7fe] p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all font-bold" placeholder="제목을 입력하세요" value={postTitle} onChange={e => setPostTitle(e.target.value)} autoFocus /><textarea className="w-full bg-[#eef7fe] p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all h-40 resize-none" placeholder="내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} /><div className="mb-6"><div className="flex gap-2 mb-2"><div className="flex-1"><input type="file" accept="image/*" id="img-upload" className="hidden" onChange={handleImageSelect} /><label htmlFor="img-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#e6f2fb] rounded-xl cursor-pointer hover:bg-[#d9edf9] transition-all text-xs font-bold border border-dashed border-[#a7d1e9]"><Icons.Camera /> {selectedImage ? '사진 변경' : '사진 첨부'}</label></div><div className="flex-1"><input type="file" id="file-upload" className="hidden" onChange={handleFileSelect} /><label htmlFor="file-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#e6f2fb] rounded-xl cursor-pointer hover:bg-[#d9edf9] transition-all text-xs font-bold border border-dashed border-[#a7d1e9]"><Icons.Clip /> {selectedFile ? '파일 변경' : '파일 첨부'}</label></div></div>{(previewUrl || selectedFile) && (<div className="space-y-2">{previewUrl && (<div className="relative w-full h-32 rounded-xl overflow-hidden border border-[#b9dcf0]"><img src={previewUrl} className="w-full h-full object-cover" alt="미리보기" /><button onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="absolute top-1 right-1 bg-[#0d3c52]/45 text-white rounded-full p-1"><Icons.Close /></button></div>)}{selectedFile && (<div className="flex items-center justify-between bg-[#e4f4fd] p-3 rounded-xl border border-[#cfeafa]"><div className="flex items-center gap-2 overflow-hidden"><Icons.File /><span className="text-xs font-bold text-[#075f84] truncate">{selectedFile.name}</span></div><button onClick={() => setSelectedFile(null)} className="text-[#6d94ac] hover:text-[#e0526a]"><Icons.Close /></button></div>)}</div>)}</div><div className="flex gap-3"><button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9] transition-colors">취소</button><button onClick={handleWritePost} disabled={uploading} className="flex-1 py-4 bg-[#17a2d9] text-white rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all disabled:bg-[#8fb9cf]">{uploading ? '업로드 중...' : '작성완료'}</button></div></div></div>)}
-      {isDetailModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden"><div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-[#17a2d9]' : 'bg-[#ff7a8a]'}`}></div><div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-[#87a9bd] hover:text-[#e0526a] p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-[#87a9bd] hover:text-[#0f3f57] p-2 transition-all"><Icons.Close /></button></div><h2 className="text-2xl font-extrabold mb-2 pr-20 text-[#0f3f57] leading-tight">{selectedRaid?.title}</h2><div className="flex items-center gap-2 mb-6 bg-[#eef7fe] p-2 rounded-xl border border-[#cfe6f5] w-fit"><span className="text-xs text-[#6d94ac] font-bold">HOST</span>{selectedRaid?.host_avatar && renderAvatar(selectedRaid.host_avatar, "w-5 h-5")}<span className="text-sm font-bold text-[#265d75]">{selectedRaid?.host_name || '알수없음'}</span></div><div className="bg-[#eef7fe] p-6 rounded-3xl mb-6 max-h-[300px] overflow-y-auto border border-[#cfe6f5]"><p className="text-xs font-bold text-[#6d94ac] mb-4 uppercase tracking-wider flex items-center justify-between"><span>참가자 현황</span><span className={`px-2 py-1 rounded-full text-xs ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-[#ffe7eb] text-[#e0526a]' : 'bg-[#cfeafa] text-[#0b7fae]'}`}>{participants.length} / {selectedRaid?.max_members || 4}명</span></p><div className="space-y-3">{participants.length === 0 ? <p className="text-[#6d94ac] text-sm text-center py-4">참가자가 없습니다.</p> : null}{participants.map(p => (<div key={p.id} className="flex items-center justify-between bg-[#ffffff] p-3 rounded-2xl border border-[#cfe6f5] shadow-[0_4px_16px_rgba(20,110,150,0.07)]/50"><div className="flex items-center gap-4">{renderAvatar(p.game_class, "w-10 h-10")}<div className="flex flex-col"><span className="font-bold text-sm text-[#0f3f57]">{p.user_name}</span><span className="text-[10px] font-bold text-[#0b7fae] uppercase tracking-wide bg-[#e4f4fd] px-2 py-0.5 rounded-md w-fit mt-0.5">{p.game_class}</span></div></div></div>))}</div></div><div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-[#e6f2fb] text-[#265d75] rounded-2xl font-bold hover:bg-[#d9edf9] text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-[#fff1f4] text-[#e0526a] rounded-2xl font-bold hover:bg-[#ffdde4] text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={participants.length >= (selectedRaid?.max_members || 4)} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${participants.length >= (selectedRaid?.max_members || 4) ? 'bg-[#8fb9cf] cursor-not-allowed' : 'bg-[#17a2d9] hover:bg-[#0e8ec0] active:scale-95'}`}>{participants.length >= (selectedRaid?.max_members || 4) ? '정원 마감' : '참가하기'}</button>)}</div></div></div>)}
+      {isDetailModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden"><div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-[#17a2d9]' : 'bg-[#ff7a8a]'}`}></div><div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-[#87a9bd] hover:text-[#e0526a] p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-[#87a9bd] hover:text-[#0f3f57] p-2 transition-all"><Icons.Close /></button></div><h2 className="text-2xl font-extrabold mb-2 pr-20 text-[#0f3f57] leading-tight">{selectedRaid?.title}</h2><div className="flex items-center gap-2 mb-6 bg-[#eef7fe] p-2 rounded-xl border border-[#cfe6f5] w-fit"><span className="text-xs text-[#6d94ac] font-bold">HOST</span>{selectedRaid?.host_avatar && renderAvatar(selectedRaid.host_avatar, "w-5 h-5")}<span className="text-sm font-bold text-[#265d75]">{selectedRaid?.host_name || '알수없음'}</span></div><div className="bg-[#eef7fe] p-5 rounded-3xl mb-6 border border-[#cfe6f5]">
+  <p className="text-xs font-bold text-[#6d94ac] mb-3 uppercase tracking-wider flex items-center justify-between">
+    <span>참가자 현황</span>
+    <span className={`px-2 py-1 rounded-full text-xs ${slotState.isFull ? 'bg-[#ffe7eb] text-[#e0526a]' : 'bg-[#cfeafa] text-[#0b7fae]'}`}>
+      {slotState.isFull ? '모집완료' : '모집중'} · {participants.length} / {slotState.max}명
+    </span>
+  </p>
+
+  {/* ★ 크레이지 아케이드식 자리 배치 — 4인 2x2, 8인 4x2 */}
+  <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${slotState.cols}, minmax(0, 1fr))` }}>
+    {slotState.slots.map(slot => {
+      const canEdit = isAdmin || selectedRaid?.created_by_email === user.email;
+      if (slot.kind === 'member') {
+        const p: any = slot.member;
+        const isMe = p.user_email === user.email;
+        return (
+          <div key={slot.index}
+            className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-1 p-1 transition-all ${isMe ? 'bg-[#e4f4fd] border-[#17a2d9]' : 'bg-[#ffffff] border-[#cfe6f5]'}`}>
+            {renderAvatar(p.game_class, "w-9 h-9")}
+            <span className="text-[11px] font-bold text-[#0f3f57] truncate max-w-full px-1">{p.user_name}</span>
+            <span className="text-[9px] text-[#6d94ac] truncate max-w-full px-1">{p.game_class}</span>
+          </div>
+        );
+      }
+      if (slot.kind === 'blocked') {
+        return (
+          <button key={slot.index} onClick={() => toggleSlotBlock(slot.index)} disabled={!canEdit}
+            title={canEdit ? '눌러서 자리 열기' : '파티장이 잠근 자리입니다'}
+            className={`aspect-square rounded-2xl border-2 border-dashed border-[#b9dcf0] bg-[#e6f2fb] flex flex-col items-center justify-center gap-0.5 relative overflow-hidden ${canEdit ? 'hover:border-[#8fb9cf] cursor-pointer' : 'cursor-default'}`}>
+            <span className="absolute inset-0 flex items-center justify-center text-[#a7d1e9] text-4xl font-thin leading-none select-none">✕</span>
+            <span className="relative text-[10px] font-extrabold text-[#4a7d97] mt-8">고스트라이더</span>
+          </button>
+        );
+      }
+      return (
+        <button key={slot.index} onClick={() => toggleSlotBlock(slot.index)} disabled={!canEdit}
+          title={canEdit ? '눌러서 자리 잠그기' : '빈 자리'}
+          className={`aspect-square rounded-2xl border-2 border-dashed border-[#cfe6f5] bg-[#ffffff] flex items-center justify-center transition-all ${canEdit ? 'hover:border-[#17a2d9] hover:bg-[#f5fbff] cursor-pointer' : 'cursor-default'}`}>
+          <span className="text-[11px] font-bold text-[#a7d1e9]">빈자리</span>
+        </button>
+      );
+    })}
+  </div>
+
+  {(isAdmin || selectedRaid?.created_by_email === user.email) && (
+    <p className="text-[10px] text-[#87a9bd] mt-3 text-center leading-relaxed">
+      빈 칸을 누르면 자리를 잠글 수 있습니다. 인원이 덜 차도 남는 자리를 잠그면 모집완료가 됩니다.
+    </p>
+  )}
+</div><div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-[#e6f2fb] text-[#265d75] rounded-2xl font-bold hover:bg-[#d9edf9] text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-[#fff1f4] text-[#e0526a] rounded-2xl font-bold hover:bg-[#ffdde4] text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={slotState.isFull} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${slotState.isFull ? 'bg-[#8fb9cf] cursor-not-allowed' : 'bg-[#17a2d9] hover:bg-[#0e8ec0] active:scale-95'}`}>{slotState.isFull ? '모집 마감' : '참가하기'}</button>)}</div></div></div>)}
 
       {/* ★ 롤링페이퍼 작성 모달 */}
       {isPaperModalOpen && (
         <div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[10000] p-4 animate-in fade-in zoom-in-95 duration-200">
           <div className="bg-[#ffffff] rounded-[2rem] shadow-2xl w-full max-w-sm flex flex-col max-h-[88vh] overflow-hidden">
             <div className="bg-[#fff1f4] px-6 py-4 flex items-center justify-between border-b border-[#ffd6de]">
-              <h2 className="text-lg font-bold text-[#b32f47]">💌 롤링페이퍼 남기기</h2>
+              <h2 className="text-lg font-bold text-[#b32f47]">💌 롤링페이퍼 {editingPaperId ? '수정' : '남기기'}</h2>
               <button onClick={() => setIsPaperModalOpen(false)} className="text-[#e8a5b0] hover:text-[#b32f47] p-1"><Icons.Close /></button>
             </div>
 
@@ -1254,8 +1368,8 @@ export default function RaidScheduler() {
             </div>
 
             <div className="flex gap-3 p-6 pt-0">
-              <button onClick={() => setIsPaperModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>
-              <button onClick={handleSavePaper} className="flex-1 bg-[#ff7a8a] text-white py-4 rounded-2xl font-bold hover:bg-[#e0526a] shadow-lg transition-all">남기기</button>
+              <button onClick={() => { setIsPaperModalOpen(false); setEditingPaperId(null); }} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>
+              <button onClick={handleSavePaper} className="flex-1 bg-[#ff7a8a] text-white py-4 rounded-2xl font-bold hover:bg-[#e0526a] shadow-lg transition-all">{editingPaperId ? '수정 완료' : '남기기'}</button>
             </div>
           </div>
         </div>
