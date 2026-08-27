@@ -60,11 +60,29 @@ const mixWhite = (hex: string, ratio: number) => {
   const m = (v: number) => Math.round(v + (255 - v) * ratio);
   return `#${[m(r), m(g), m(b)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
 };
-const isDarkOn = (hex: string) => {
+const mixBlack = (hex: string, ratio: number) => {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const m = (v: number) => Math.round(v * (1 - ratio));
+  return `#${[m(r), m(g), m(b)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+};
+
+const luminance = (hex: string) => {
   const h = hex.replace('#', '');
   const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
   const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  return (r * 299 + g * 587 + b * 114) / 1000 < 150; // 어두우면 흰 글씨
+  return (r * 299 + g * 587 + b * 114) / 1000;
+};
+
+/* 어떤 색을 고르든 흰 글씨가 또렷하게 보이도록,
+   충분히 어두워질 때까지 검정을 섞습니다.
+   (노란색처럼 밝은 색을 던전 색으로 골라도 글씨가 묻히지 않습니다) */
+const ensureDark = (hex: string) => {
+  let c = hex;
+  let guard = 0;
+  while (luminance(c) > 128 && guard < 12) { c = mixBlack(c, 0.15); guard++; }
+  return c;
 };
 
 /* ── 달력 4종 ──────────────────────────────────────────────
@@ -91,6 +109,25 @@ const GIGAENG = [
 // 오늘 (KST) — 조기 반환 위에서도 쓰이므로 모듈 최상단에 둡니다.
 const todayKST = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().split('T')[0];
 const fmtTime = (sec: number) => sec > 0 ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : '-';
+
+/* 기록 시간 입력 규칙
+   뒤 두 자리는 초, 앞은 분으로 읽습니다.
+   '426' → 4분 26초 (266초) / '706' → 7분 6초 / '1230' → 12분 30초 / '45' → 45초 */
+const parseMMSS = (raw: string): number | null => {
+  const d = (raw || '').replace(/[^0-9]/g, '');
+  if (!d) return null;
+  if (d.length <= 2) return parseInt(d, 10);
+  const sec = parseInt(d.slice(-2), 10);
+  const min = parseInt(d.slice(0, -2), 10);
+  return min * 60 + sec;
+};
+
+/* 저장된 초를 다시 입력창 표기('426')로 되돌립니다. */
+const toMMSS = (sec: number | null | undefined) => {
+  if (!sec) return '';
+  const m = Math.floor(sec / 60), sc = sec % 60;
+  return m > 0 ? `${m}${String(sc).padStart(2, '0')}` : String(sc);
+};
 
 const calOf = (key: string) => CALENDARS.find(c => c.key === key) || CALENDARS[0];
 
@@ -316,15 +353,15 @@ export default function RaidScheduler() {
       else label = `[모집중] ${who}`;
 
       const base = ev.is_closed ? CLOSED_COLOR : eventColorOf(ev);
-      const solid = isFull || ev.is_closed;            // 꽉 찼거나 마감이면 진한 색
-      const bg = solid ? base : mixWhite(base, 0.72);  // 모집중은 파스텔
+      const solid = isFull || ev.is_closed;                    // 꽉 찼거나 마감이면 진한 색
+      const bg = solid ? ensureDark(base) : mixWhite(base, 0.74);
 
       return {
         ...ev,
         title: label,
         backgroundColor: bg,
         borderColor: 'transparent',
-        textColor: solid ? (isDarkOn(base) ? '#ffffff' : '#3d2c00') : '#33414d',
+        textColor: solid ? '#ffffff' : mixBlack(base, 0.55),
         extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title, blocked_slots: ev.blocked_slots || [], is_closed: !!ev.is_closed },
       };
     });
@@ -497,9 +534,9 @@ export default function RaidScheduler() {
     const newProfile: any = {
       id: user.id, nickname: newNickname, game_class: newClass,
       character_name: newCharName.trim() || null,
-      heosang_score: toInt(gig.heosang_score), heosang_seconds: toInt(gig.heosang_seconds),
-      gwanggi_score: toInt(gig.gwanggi_score), gwanggi_seconds: toInt(gig.gwanggi_seconds),
-      mulgil_score: toInt(gig.mulgil_score), mulgil_seconds: toInt(gig.mulgil_seconds),
+      heosang_score: toInt(gig.heosang_score), heosang_seconds: parseMMSS(gig.heosang_seconds),
+      gwanggi_score: toInt(gig.gwanggi_score), gwanggi_seconds: parseMMSS(gig.gwanggi_seconds),
+      mulgil_score: toInt(gig.mulgil_score), mulgil_seconds: parseMMSS(gig.mulgil_seconds),
       records_updated_at: new Date().toISOString(),
     };
     // ★ 닉네임이 바뀌었으면 흩어진 이름을 먼저 한꺼번에 정리합니다.
@@ -547,11 +584,11 @@ export default function RaidScheduler() {
       setNewCharName(myProfile.character_name || '');
       setGig({
         heosang_score: myProfile.heosang_score ? String(myProfile.heosang_score) : '',
-        heosang_seconds: myProfile.heosang_seconds ? String(myProfile.heosang_seconds) : '',
+        heosang_seconds: toMMSS(myProfile.heosang_seconds),
         gwanggi_score: myProfile.gwanggi_score ? String(myProfile.gwanggi_score) : '',
-        gwanggi_seconds: myProfile.gwanggi_seconds ? String(myProfile.gwanggi_seconds) : '',
+        gwanggi_seconds: toMMSS(myProfile.gwanggi_seconds),
         mulgil_score: myProfile.mulgil_score ? String(myProfile.mulgil_score) : '',
-        mulgil_seconds: myProfile.mulgil_seconds ? String(myProfile.mulgil_seconds) : '',
+        mulgil_seconds: toMMSS(myProfile.mulgil_seconds),
       });
     }
     setIsProfileModalOpen(true);
@@ -831,7 +868,7 @@ export default function RaidScheduler() {
                 {r && GIGAENG.map(g => (
                   <span key={g.key} className="text-[10px] font-bold px-1.5 py-0.5 rounded"
                     style={{ background: g.soft, color: g.color }}>
-                    {g.label} {(r[`${g.key}_score`] || 0).toLocaleString()}
+                    {g.label} {fmtTime(r[`${g.key}_seconds`] || 0)}
                   </span>
                 ))}
                 {h.message && <span className="text-[11px] text-[#8a6a1e] truncate">— {h.message}</span>}
@@ -1149,17 +1186,17 @@ export default function RaidScheduler() {
                   {calOf(activeCalendar).perDungeon
                     ? dungeons.filter(d => d.type === 'raid').slice(0, 8).map(d => (
                         <span key={d.id} className="flex items-center gap-1.5 text-[11px] font-bold text-[#4a7d97]">
-                          <span className="w-3.5 h-3.5 rounded" style={{ background: d.color || calOf(activeCalendar).full }} />{d.name}
+                          <span className="w-3.5 h-3.5 rounded" style={{ background: ensureDark(d.color || calOf(activeCalendar).full) }} />{d.name}
                         </span>
                       ))
-                    : [{ c: calOf(activeCalendar).full, t: '모집완료' },
-                       { c: mixWhite(calOf(activeCalendar).full, 0.72), t: '모집중' }].map(l => (
+                    : [{ c: ensureDark(calOf(activeCalendar).full), t: '모집완료' },
+                       { c: mixWhite(calOf(activeCalendar).full, 0.74), t: '모집중' }].map(l => (
                         <span key={l.t} className="flex items-center gap-1.5 text-[11px] font-bold text-[#4a7d97]">
                           <span className="w-3.5 h-3.5 rounded" style={{ background: l.c }} />{l.t}
                         </span>
                       ))}
                   <span className="flex items-center gap-1.5 text-[11px] font-bold text-[#4a7d97]">
-                    <span className="w-3.5 h-3.5 rounded" style={{ background: CLOSED_COLOR }} />마감
+                    <span className="w-3.5 h-3.5 rounded" style={{ background: ensureDark(CLOSED_COLOR) }} />마감
                   </span>
                 </div>
               </div>
@@ -1258,14 +1295,12 @@ export default function RaidScheduler() {
               </div>
             ) : (
               <div className="overflow-x-auto -mx-4 md:mx-0 px-4 md:px-0">
-                <table className="w-full min-w-[560px] border-collapse">
+                <table className="w-full min-w-[440px] border-collapse">
                   <thead>
                     <tr className="text-[11px] text-[#5d87a1] border-b border-[#cfe6f5]">
                       <th className="text-left font-bold py-2.5 pl-1 w-20">순위</th>
                       <th className="text-left font-bold py-2.5">캐릭터</th>
-                      <th className="text-center font-bold py-2.5 w-16">어비스</th>
-                      <th className="text-center font-bold py-2.5 w-16">레이드</th>
-                      <th className="text-center font-bold py-2.5 w-16">시간</th>
+                      <th className="text-center font-bold py-2.5 w-20">시간</th>
                       <th className="text-right font-bold py-2.5 pr-1 w-24">기갱 점수</th>
                     </tr>
                   </thead>
@@ -1297,13 +1332,7 @@ export default function RaidScheduler() {
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 text-center">
-                            <span className={`inline-block min-w-[30px] px-2 py-1 rounded-lg text-xs font-bold ${r.abyss > 0 ? 'bg-[#cfeafa] text-[#06465f]' : 'text-[#a7d1e9]'}`}>{r.abyss}</span>
-                          </td>
-                          <td className="py-3 text-center">
-                            <span className={`inline-block min-w-[30px] px-2 py-1 rounded-lg text-xs font-bold ${r.raid > 0 ? 'bg-[#ffd6de] text-[#b32f47]' : 'text-[#a7d1e9]'}`}>{r.raid}</span>
-                          </td>
-                          <td className="py-3 text-center text-xs font-bold text-[#265d75] tabular-nums">{fmtTime(r.seconds)}</td>
+                          <td className="py-3 text-center text-sm font-bold text-[#265d75] tabular-nums">{fmtTime(r.seconds)}</td>
                           <td className="py-3 pr-1 text-right text-sm font-extrabold tabular-nums"
                             style={{ color: GIGAENG.find(g => g.key === rankMode)?.color }}>
                             {r.score.toLocaleString()}
@@ -1318,7 +1347,6 @@ export default function RaidScheduler() {
 
             <p className="text-[11px] text-[#87a9bd] mt-5 leading-relaxed">
               점수가 같으면 클리어 시간이 빠른 쪽이 위로 올라갑니다.
-              어비스 · 레이드 횟수는 이번 주(월~일) 일정표에서 참가 버튼을 누른 횟수입니다.
               순위 변동은 어제 대비 오르내린 칸수입니다.
             </p>
           </div>
@@ -1438,7 +1466,7 @@ export default function RaidScheduler() {
       </nav>
 
       {/* --- 모달들 (기존과 동일) --- */}
-      {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{classNames().map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">인게임 캐릭터명</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" placeholder="랭킹에 표시할 캐릭터명" value={newCharName} onChange={(e) => setNewCharName(e.target.value)} /><p className="text-[10px] text-[#87a9bd] mt-1.5 ml-1">공식 랭킹 1,000위 안에 들면 점수가 자동으로 채워집니다.</p></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">어비스 기갱 (선택)</label><div className="space-y-2">{GIGAENG.map(g => (<div key={g.key} className="flex items-center gap-2"><span className="w-11 shrink-0 text-center text-[11px] font-extrabold py-2 rounded-lg" style={{ background: g.soft, color: g.color }}>{g.label}</span><input className="flex-1 min-w-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="점수" value={gig[`${g.key}_score`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_score`]: e.target.value })} /><input className="w-20 shrink-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="초" value={gig[`${g.key}_seconds`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_seconds`]: e.target.value })} /></div>))}</div><p className="text-[10px] text-[#87a9bd] mt-2 ml-1 leading-relaxed">비워두어도 됩니다. PC에서 자동 전송을 쓰면 접속할 때마다 갱신됩니다.</p>{myProfile?.ingest_token && (<div className="mt-2 bg-[#eef7fe] rounded-xl p-2.5"><div className="text-[10px] font-bold text-[#6d94ac] mb-1">내 전송 토큰</div><code className="block text-[10px] text-[#4a7d97] break-all select-all">{myProfile.ingest_token}</code></div>)}</div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
+      {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{classNames().map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">인게임 캐릭터명</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" placeholder="랭킹에 표시할 캐릭터명" value={newCharName} onChange={(e) => setNewCharName(e.target.value)} /><p className="text-[10px] text-[#87a9bd] mt-1.5 ml-1">공식 랭킹 1,000위 안에 들면 점수가 자동으로 채워집니다.</p></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">어비스 기갱 (선택)</label><div className="space-y-2">{GIGAENG.map(g => (<div key={g.key} className="flex items-center gap-2"><span className="w-11 shrink-0 text-center text-[11px] font-extrabold py-2 rounded-lg" style={{ background: g.soft, color: g.color }}>{g.label}</span><input className="flex-1 min-w-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="점수" value={gig[`${g.key}_score`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_score`]: e.target.value })} /><input className="w-20 shrink-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="426" value={gig[`${g.key}_seconds`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_seconds`]: e.target.value })} /></div>))}</div><p className="text-[10px] text-[#87a9bd] mt-2 ml-1 leading-relaxed">시간은 <b>426 → 4분 26초</b> 처럼 적습니다. (뒤 두 자리가 초)<br />비워두어도 됩니다. PC에서 자동 전송을 쓰면 접속할 때마다 갱신됩니다.</p>{myProfile?.ingest_token && (<div className="mt-2 bg-[#eef7fe] rounded-xl p-2.5"><div className="text-[10px] font-bold text-[#6d94ac] mb-1">내 전송 토큰</div><code className="block text-[10px] text-[#4a7d97] break-all select-all">{myProfile.ingest_token}</code></div>)}</div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
       
       {/* ★ 등록 모달 (날짜 선택 수정됨) */}
       {isCreateModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-[#0f3f57]">일정 등록</h2><input type="date" className="w-full bg-[#eef7fe] p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-[#17a2d9] font-medium text-[#4a7d97] cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-4">{CALENDARS.map(c => (<button key={c.key} onClick={() => setRaidType(c.key)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${raidType === c.key ? 'bg-[#ffffff] shadow-sm' : 'text-[#6d94ac]'}`} style={raidType === c.key ? { color: c.full } : undefined}>{c.label}</button>))}</div><div className="mb-6 text-left">
