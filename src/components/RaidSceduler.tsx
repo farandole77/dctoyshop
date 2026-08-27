@@ -957,11 +957,45 @@ export default function RaidScheduler() {
   };
   // ================================================
 
-  const TabButton = ({ tabName, label, icon }: { tabName: string, label: string, icon: any }) => (
-    <button onClick={() => setActiveTab(tabName as any)} className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold transition-all duration-200 text-sm md:text-base ${activeTab === tabName ? 'bg-[#17a2d9] text-white shadow-md transform scale-105' : 'text-[#5d87a1] hover:bg-[#e6f2fb] hover:text-[#0f3f57]'}`}>
+  // ★ 달력 패널 — 일정 탭과 홈 화면(데스크톱) 양쪽에서 함께 씁니다.
+  const CalendarPanel = () => (
+  <div className="bg-[#ffffff] p-4 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-full flex flex-col">
+              {/* ★ 달력 3종 전환 */}
+              <div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-3">
+                {CALENDARS.map(c => (
+                  <button key={c.key} onClick={() => setActiveCalendar(c.key)}
+                    className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${activeCalendar === c.key ? 'bg-[#ffffff] shadow-sm' : 'text-[#6d94ac]'}`}
+                    style={activeCalendar === c.key ? { color: calOf(c.key).full } : undefined}>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* ★ 제목 + 범례 */}
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-1">
+                <h3 className="text-base md:text-lg font-extrabold text-[#0f3f57]">{calOf(activeCalendar).title}</h3>
+                <div className="flex items-center gap-3">
+                  {calOf(activeCalendar).legend.map(l => (
+                    <span key={l.t} className="flex items-center gap-1.5 text-[11px] font-bold text-[#4a7d97]">
+                      <span className="w-3.5 h-3.5 rounded" style={{ background: l.c }} />{l.t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={calendarEvents} dateClick={(arg) => { setSelectedDate(arg.dateStr); setRaidType(activeCalendar); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
+            </div>
+  );
+
+  const TabButton = ({ tabName, label, icon }: { tabName: string, label: string, icon: any }) => {
+    // 홈은 모바일 전용 화면이라, 데스크톱에서는 '일정'이 선택된 것으로 보이게 합니다.
+    const activeTabName = activeTab === 'home' ? 'calendar' : activeTab;
+    return (
+    <button onClick={() => setActiveTab(tabName as any)} className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold transition-all duration-200 text-sm md:text-base ${activeTabName === tabName ? 'bg-[#17a2d9] text-white shadow-md transform scale-105' : 'text-[#5d87a1] hover:bg-[#e6f2fb] hover:text-[#0f3f57]'}`}>
       {icon}<span>{label}</span>
     </button>
-  );
+    );
+  };
 
   return (
     <div className="flex flex-col h-screen text-[#0f3f57] overflow-hidden">
@@ -996,47 +1030,17 @@ export default function RaidScheduler() {
         {activeTab === 'home' ? (
           <>
             <MobileHome />
-            {/* 데스크톱에는 홈 탭이 없으므로 캘린더를 보여줍니다 */}
-            <div className="hidden md:flex bg-[#ffffff] p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-full flex-col">
-              <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={calendarEvents} dateClick={(arg) => { setSelectedDate(arg.dateStr); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
+            {/* 데스크톱에는 홈 탭이 없으므로 같은 달력 패널을 그대로 보여줍니다 */}
+            <div className="hidden md:flex flex-col h-full">
+              <CalendarPanel />
             </div>
             <button onClick={openCreateModal} className="fixed bottom-24 right-6 md:bottom-10 md:right-10 bg-[#17a2d9] text-white p-4 rounded-full shadow-lg hover:bg-[#0e8ec0] transition-all z-50 active:scale-95" title="일정 등록"><Icons.Plus /></button>
           </>
         ) : activeTab === 'calendar' ? (
-          <div className="bg-[#ffffff] p-4 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)] h-full flex flex-col">
-            {/* ★ 달력 3종 전환 */}
-            <div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-3">
-              {CALENDARS.map(c => (
-                <button key={c.key} onClick={() => setActiveCalendar(c.key)}
-                  className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${activeCalendar === c.key ? 'bg-[#ffffff] shadow-sm' : 'text-[#6d94ac]'}`}
-                  style={activeCalendar === c.key ? { color: calOf(c.key).full } : undefined}>
-                  {c.label}
-                </button>
-              ))}
-            </div>
-
-            {/* ★ 제목 + 범례 */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-1">
-              <h3 className="text-base md:text-lg font-extrabold text-[#0f3f57]">{calOf(activeCalendar).title}</h3>
-              <div className="flex items-center gap-3">
-                {calOf(activeCalendar).legend.map(l => (
-                  <span key={l.t} className="flex items-center gap-1.5 text-[11px] font-bold text-[#4a7d97]">
-                    <span className="w-3.5 h-3.5 rounded" style={{ background: l.c }} />{l.t}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <FullCalendar ref={calendarRef} plugins={[dayGridPlugin, interactionPlugin, listPlugin]} initialView="dayGridMonth" events={calendarEvents} dateClick={(arg) => { setSelectedDate(arg.dateStr); setRaidType(activeCalendar); setIsCreateModalOpen(true); }} eventClick={handleEventClick} height="100%" headerToolbar={{ left: 'prev', center: 'title', right: 'next' }} />
-            {/* ★ 1. 플로팅 등록 버튼 (FAB) - 캘린더 탭일 때만 보임 */}
-            <button
-              onClick={openCreateModal}
-              className="fixed bottom-24 right-6 md:bottom-10 md:right-10 bg-[#17a2d9] text-white p-4 rounded-full shadow-lg hover:bg-[#0e8ec0] transition-all z-50 hover:scale-110 active:scale-95"
-              title="일정 등록"
-            >
-              <Icons.Plus />
-            </button>
-          </div>
+          <>
+            <CalendarPanel />
+            <button onClick={openCreateModal} className="fixed bottom-24 right-6 md:bottom-10 md:right-10 bg-[#17a2d9] text-white p-4 rounded-full shadow-lg hover:bg-[#0e8ec0] transition-all z-50 hover:scale-110 active:scale-95" title="일정 등록"><Icons.Plus /></button>
+          </>
         ) : activeTab === 'stats' ? (
           // ★ 어비스 기갱 순위
           <div className="bg-[#ffffff] p-4 md:p-8 rounded-3xl border border-[#cfe6f5] shadow-[0_6px_24px_rgba(20,110,150,0.08)]">
