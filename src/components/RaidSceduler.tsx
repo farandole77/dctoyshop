@@ -63,7 +63,7 @@ const CALENDARS = [
     legend: [{ c: '#2f5fe0', t: '모집완료' }, { c: '#bcd4fb', t: '모집중' }],
   },
   {
-    key: 'explore', label: '탐색·숙제', title: '어비스 탐색 및 숙제 달력',
+    key: 'explore', label: '타임어택·숙제', title: '어비스 타임어택 및 숙제 달력',
     dungeonType: 'abyss' as const, tag: '[어비스]',
     full: '#2e8b84', fullText: '#ffffff', open: '#bfe6e0', openText: '#14514c',
     legend: [{ c: '#2e8b84', t: '모집완료' }, { c: '#bfe6e0', t: '모집중' }],
