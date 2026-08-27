@@ -938,7 +938,7 @@ export default function RaidScheduler() {
                   ))}
                 </div>
                 {h.message && (
-                  <p className="text-[22px] leading-snug font-extrabold text-[#7a5a0c] mt-1 mb-1 break-words">
+                  <p className="text-[14px] leading-snug font-extrabold text-[#7a5a0c] mt-1 mb-1 break-words">
                     “{h.message}”
                   </p>
                 )}
