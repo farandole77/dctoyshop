@@ -106,6 +106,13 @@ const CALENDARS = [
   { key: 'raid',       label: '레이드',   title: '레이드 달력',          dungeonType: 'raid'  as const, tag: '[레이드]', full: '#f0b429', perDungeon: true },
 ];
 
+/* '20:00' → '20시' , '20:30' → '20시30분' */
+const hourLabel = (hm: string) => {
+  if (!hm) return '';
+  const [h, m] = hm.split(':');
+  return m && m !== '00' ? `${parseInt(h, 10)}시${m}분` : `${parseInt(h, 10)}시`;
+};
+
 const CLOSED_COLOR = '#8fa3ae';   // 마감된 일정
 
 /* ── 어비스 기갱 3종 ───────────────────────────────────── */
@@ -255,6 +262,9 @@ export default function RaidScheduler() {
   const [raidType, setRaidType] = useState<string>('gigaeng');
   const [selectedDungeon, setSelectedDungeon] = useState('');
   const [maxMembers, setMaxMembers] = useState(4);
+  const [eventTime, setEventTime] = useState('20:00');       // 등록할 시각
+  const [editDate, setEditDate] = useState('');              // 등록 후 날짜 변경
+  const [editTime, setEditTime] = useState('');
 
   // ★ 프로필: 인게임 캐릭터 정보
   const [newCharName, setNewCharName] = useState('');
@@ -360,6 +370,7 @@ export default function RaidScheduler() {
       else if (isFull && blocked > 0) label = `${who} 외 ${blocked}명`;
       else if (isFull) label = `[모집완료] ${who}`;
       else label = `[모집중] ${who}`;
+      if (ev.event_time) label = `${hourLabel(ev.event_time)} ${label}`;
 
       const base = ev.is_closed ? CLOSED_COLOR : eventColorOf(ev);
       const solid = isFull || ev.is_closed;                    // 꽉 찼거나 마감이면 진한 색
@@ -371,7 +382,7 @@ export default function RaidScheduler() {
         backgroundColor: bg,
         borderColor: 'transparent',
         textColor: solid ? ensureLight(base) : mixBlack(base, 0.55),
-        extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title, blocked_slots: ev.blocked_slots || [], is_closed: !!ev.is_closed },
+        extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title, blocked_slots: ev.blocked_slots || [], is_closed: !!ev.is_closed, event_time: ev.event_time || '' },
       };
     });
 
@@ -511,6 +522,23 @@ export default function RaidScheduler() {
     await fetchRaids();
   };
 
+  // ★ 등록 후 날짜 · 시간 변경
+  const handleRescheduleRaid = async () => {
+    if (!selectedRaid) return;
+    const canEdit = isAdmin || selectedRaid.created_by_email === user.email;
+    if (!canEdit) return alert('파티장만 일정을 옮길 수 있습니다.');
+    if (!editDate) return alert('날짜를 선택해주세요.');
+
+    const { error } = await supabase.from('raids')
+      .update({ start_time: editDate, event_time: editTime || null })
+      .eq('id', selectedRaid.id);
+    if (error) return alert('변경 실패: ' + error.message);
+
+    setSelectedRaid({ ...selectedRaid, date: editDate, event_time: editTime });
+    await fetchRaids();
+    alert('일정을 옮겼습니다.');
+  };
+
   const initialize = async () => {
     setIsLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
@@ -612,6 +640,7 @@ export default function RaidScheduler() {
         max_members: raid.max_members,
         blocked_slots: raid.blocked_slots || [],
         is_closed: !!raid.is_closed,
+        event_time: raid.event_time || '',
         calendar_type: raid.calendar_type || (isAbyssTitle(raid.title) ? 'gigaeng' : 'raid'),
       })));
     }
@@ -642,8 +671,11 @@ export default function RaidScheduler() {
       host_name: raid.host_name, host_avatar: raid.host_avatar,
       blocked_slots: raid.blocked_slots || [],
       is_closed: !!raid.is_closed,
+      event_time: raid.event_time || '',
     });
     setParticipants(data || []);
+    setEditDate(raid.date);
+    setEditTime(raid.event_time || '');
     setIsDetailModalOpen(true);
   };
 
@@ -762,11 +794,11 @@ export default function RaidScheduler() {
 
   const handleCreate = async () => { 
     if (!selectedDungeon) return alert('던전 선택!'); const typeTag = calOf(raidType).tag; setActiveCalendar(raidType); const finalTitle = `${typeTag} ${selectedDungeon}`; 
-    const { data: newRaid, error } = await supabase.from('raids').insert([{ title: finalTitle, start_time: selectedDate, created_by_email: user.email, max_members: maxMembers, host_name: myProfile?.nickname || '알수없음', host_avatar: myProfile?.game_class || '모험가', calendar_type: raidType }]).select().single();
+    const { data: newRaid, error } = await supabase.from('raids').insert([{ title: finalTitle, start_time: selectedDate, created_by_email: user.email, max_members: maxMembers, host_name: myProfile?.nickname || '알수없음', host_avatar: myProfile?.game_class || '모험가', calendar_type: raidType, event_time: eventTime || null }]).select().single();
     if (newRaid) { await supabase.from('participants').insert([{ raid_id: newRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); }
     setRaidTitle(''); setMaxMembers(4); setIsCreateModalOpen(false); fetchRaids(); 
   };
-  const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.extendedProps.realTitle || arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar, blocked_slots: arg.event.extendedProps.blocked_slots || [], is_closed: !!arg.event.extendedProps.is_closed }); setParticipants(data || []); setIsDetailModalOpen(true); };
+  const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.extendedProps.realTitle || arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar, blocked_slots: arg.event.extendedProps.blocked_slots || [], is_closed: !!arg.event.extendedProps.is_closed, event_time: arg.event.extendedProps.event_time || '' }); setParticipants(data || []); setEditDate(arg.event.startStr.split('T')[0]); setEditTime(arg.event.extendedProps.event_time || ''); setIsDetailModalOpen(true); };
   const handleJoin = async () => { if (!myProfile) return alert('프로필 필요'); const limit = selectedRaid.max_members || 4; if (participants.length >= limit) return alert(`🚫 정원이 꽉 찼습니다! (최대 ${limit}명)`); await supabase.from('participants').insert([{ raid_id: selectedRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); refreshParticipants(selectedRaid.id); };
   const handleLeave = async () => { const isHost = selectedRaid.created_by_email === user.email; if (isHost && participants.length <= 1) { if (!confirm("파티가 해체됩니다. 삭제하시겠습니까?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); } else { if (!confirm("취소?")) return; await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email); refreshParticipants(selectedRaid.id); } };
   const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
@@ -779,7 +811,25 @@ export default function RaidScheduler() {
     gameClasses.length > 0 ? gameClasses.map(c => c.name) : Object.keys(CLASS_IMAGES);
 
   const renderAvatar = (gameClass: string, size = "w-10 h-10") => { let imagePath = classIconOf(gameClass); return <img src={imagePath} className={`${size} rounded-full object-cover border border-[#b9dcf0] bg-[#ffffff]`} alt={gameClass} onError={(e) => { (e.target as HTMLImageElement).src = "/class-icons/default.png"; }} />; };
-  const handleAddToCalendar = () => { if (!selectedRaid) return; const title = encodeURIComponent(`[길드] ${selectedRaid.title}`); const details = encodeURIComponent("환생 일정"); const dateStr = selectedRaid.date.replace(/-/g, ""); const dates = `${dateStr}/${dateStr}`; const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`; window.open(url, '_blank'); };
+  const handleAddToCalendar = () => {
+    if (!selectedRaid) return;
+    const title = encodeURIComponent(`[길드] ${selectedRaid.title}`);
+    const details = encodeURIComponent('환생 일정');
+    const dateStr = selectedRaid.date.replace(/-/g, '');
+    let dates: string;
+    if (selectedRaid.event_time) {
+      // 시각이 있으면 2시간짜리 일정으로 (한국시간 기준)
+      const [h, m] = selectedRaid.event_time.split(':').map((v: string) => parseInt(v, 10));
+      const startKST = new Date(`${selectedRaid.date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00+09:00`);
+      const endKST = new Date(startKST.getTime() + 2 * 3600 * 1000);
+      const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      dates = `${fmt(startKST)}/${fmt(endKST)}`;
+    } else {
+      dates = `${dateStr}/${dateStr}`;
+    }
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`;
+    window.open(url, '_blank');
+  };
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-xl font-bold text-[#6d94ac]">로딩중...</div>;
   if (!user) return <div className="min-h-screen flex flex-col justify-center items-center p-4"><div className="bg-[#ffffff] p-10 rounded-[2rem] border border-[#cfe6f5] text-center max-w-sm w-full relative overflow-hidden"><div className="absolute -top-24 -left-16 w-72 h-72 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(23,162,217,.22), transparent 65%)" }} /><div className="relative"><h1 className="text-3xl font-extrabold mb-8 text-[#164a63]">환생</h1><button onClick={handleLogin} className="w-full bg-transparent border border-[#17a2d9] p-4 rounded-2xl font-bold flex justify-center items-center gap-3 hover:bg-[#17a2d9]/12 active:bg-[#17a2d9]/22 transition-all text-[#0b7fae]"><span className="text-2xl">G</span> <span>구글 아이디로 시작</span></button><p className="text-[11px] text-[#87a9bd] mt-4">길드원만 가입할 수 있습니다</p></div></div></div>;
@@ -809,7 +859,7 @@ export default function RaidScheduler() {
   const todayStr = new Date().toISOString().split('T')[0];
   const upcomingRaids = [...raids]
     .filter(r => r.date >= todayStr)
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.event_time || '99').localeCompare(b.event_time || '99'));
   const nextRaid: any = upcomingRaids[0];
 
   const dDayLabel = (dateStr: string) => {
@@ -826,6 +876,11 @@ export default function RaidScheduler() {
     const d = new Date(dateStr + 'T00:00:00');
     const wd = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
     return `${d.getMonth() + 1}월 ${d.getDate()}일 (${wd})`;
+  };
+
+  const whenTimeLabel = (raid: any) => {
+    const base = whenLabel(raid.date);
+    return raid.event_time ? `${base} ${hourLabel(raid.event_time)}` : base;
   };
 
   // 모바일 홈 · 파티 카드
@@ -846,7 +901,7 @@ export default function RaidScheduler() {
             <span className={`text-[11px] px-2 py-0.5 rounded-md ${abyss ? 'bg-[#cfeafa] text-[#06465f]' : 'bg-[#ffd6de] text-[#b32f47]'}`}>
               {abyss ? '어비스' : '레이드'}
             </span>
-            <span className="text-[11px] text-[#6d94ac]">{whenLabel(raid.date)}</span>
+            <span className="text-[11px] text-[#6d94ac]">{whenTimeLabel(raid)}</span>
           </div>
           <div className="text-sm truncate">{raid.title}</div>
           <div className="text-[11px] text-[#6d94ac] mt-0.5">파티장 {raid.host_name || '알수없음'}</div>
@@ -883,7 +938,7 @@ export default function RaidScheduler() {
                   ))}
                 </div>
                 {h.message && (
-                  <p className="text-[14px] leading-snug font-extrabold text-[#7a5a0c] mt-1 mb-1 break-words">
+                  <p className="text-[22px] leading-snug font-extrabold text-[#7a5a0c] mt-1 mb-1 break-words">
                     “{h.message}”
                   </p>
                 )}
@@ -923,7 +978,7 @@ export default function RaidScheduler() {
             </div>
             <h3 className="text-[21px] leading-tight mb-1">{nextRaid.title}</h3>
             <div className="text-[12px] text-[#6d94ac] mb-3.5">
-              {whenLabel(nextRaid.date)} · 파티장 {nextRaid.host_name || '알수없음'}
+              {whenTimeLabel(nextRaid)} · 파티장 {nextRaid.host_name || '알수없음'}
             </div>
             <div className="flex items-center gap-1.5 mb-3.5">
               {Array.from({ length: nextRaid.max_members || 4 }).map((_, i) => {
@@ -1484,7 +1539,23 @@ export default function RaidScheduler() {
       {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{classNames().map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">인게임 캐릭터명</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" placeholder="랭킹에 표시할 캐릭터명" value={newCharName} onChange={(e) => setNewCharName(e.target.value)} /><p className="text-[10px] text-[#87a9bd] mt-1.5 ml-1">공식 랭킹 1,000위 안에 들면 점수가 자동으로 채워집니다.</p></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">어비스 기갱 (선택)</label><div className="space-y-2">{GIGAENG.map(g => (<div key={g.key} className="flex items-center gap-2"><span className="w-11 shrink-0 text-center text-[11px] font-extrabold py-2 rounded-lg" style={{ background: g.soft, color: g.color }}>{g.label}</span><input className="flex-1 min-w-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="점수" value={gig[`${g.key}_score`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_score`]: e.target.value })} /><input className="w-20 shrink-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="426" value={gig[`${g.key}_seconds`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_seconds`]: e.target.value })} /></div>))}</div><p className="text-[10px] text-[#87a9bd] mt-2 ml-1 leading-relaxed">시간은 <b>426 → 4분 26초</b> 처럼 적습니다. (뒤 두 자리가 초)<br />비워두어도 됩니다. PC에서 자동 전송을 쓰면 접속할 때마다 갱신됩니다.</p>{myProfile?.ingest_token && (<div className="mt-2 bg-[#eef7fe] rounded-xl p-2.5"><div className="text-[10px] font-bold text-[#6d94ac] mb-1">내 전송 토큰</div><code className="block text-[10px] text-[#4a7d97] break-all select-all">{myProfile.ingest_token}</code></div>)}</div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
       
       {/* ★ 등록 모달 (날짜 선택 수정됨) */}
-      {isCreateModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-[#0f3f57]">일정 등록</h2><input type="date" className="w-full bg-[#eef7fe] p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-[#17a2d9] font-medium text-[#4a7d97] cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-4">{CALENDARS.map(c => (<button key={c.key} onClick={() => setRaidType(c.key)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${raidType === c.key ? 'bg-[#ffffff] shadow-sm' : 'text-[#6d94ac]'}`} style={raidType === c.key ? { color: c.full } : undefined}>{c.label}</button>))}</div><div className="mb-6 text-left">
+      {isCreateModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative"><h2 className="text-2xl font-bold mb-1 text-[#0f3f57]">일정 등록</h2><input type="date" className="w-full bg-[#eef7fe] p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-[#17a2d9] font-medium text-[#4a7d97] cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-4">{CALENDARS.map(c => (<button key={c.key} onClick={() => setRaidType(c.key)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${raidType === c.key ? 'bg-[#ffffff] shadow-sm' : 'text-[#6d94ac]'}`} style={raidType === c.key ? { color: c.full } : undefined}>{c.label}</button>))}</div><div className="mb-4 text-left">
+        <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">시작 시간</label>
+        <div className="flex items-center gap-2">
+          <input type="time" step={600} value={eventTime} onChange={(e) => setEventTime(e.target.value)}
+            className="flex-1 bg-[#eef7fe] p-4 rounded-2xl font-bold text-center text-lg outline-none focus:ring-2 focus:ring-[#17a2d9]" />
+          <div className="flex gap-1">
+            {['20:00', '21:00', '22:00'].map(t => (
+              <button key={t} onClick={() => setEventTime(t)}
+                className={`px-2.5 py-2 rounded-xl text-xs font-bold transition-all ${eventTime === t ? 'bg-[#17a2d9] text-white' : 'bg-[#eef7fe] text-[#4a7d97] hover:bg-[#e4f4fd]'}`}>
+                {parseInt(t, 10)}시
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-6 text-left">
         <div className="flex items-center justify-between mb-2 px-1">
           <label className="block text-xs font-bold text-[#6d94ac]">던전 선택</label>
           {/* ★ 관리자만 보이게 하려면 아래 true 를 isAdmin 으로 바꾸세요 */}
@@ -1543,6 +1614,21 @@ export default function RaidScheduler() {
     </p>
   )}
 </div>{(isAdmin || selectedRaid?.created_by_email === user.email) && (
+  <div className="mb-3 bg-[#eef7fe] rounded-2xl p-3 border border-[#cfe6f5]">
+    <label className="block text-[11px] font-bold text-[#6d94ac] mb-2 ml-0.5">일정 변경</label>
+    <div className="flex items-center gap-2">
+      <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
+        className="flex-1 min-w-0 bg-[#ffffff] px-3 py-2.5 rounded-xl font-bold text-sm text-center outline-none focus:ring-2 focus:ring-[#17a2d9] border border-[#cfe6f5]" />
+      <input type="time" step={600} value={editTime} onChange={e => setEditTime(e.target.value)}
+        className="w-28 shrink-0 bg-[#ffffff] px-2 py-2.5 rounded-xl font-bold text-sm text-center outline-none focus:ring-2 focus:ring-[#17a2d9] border border-[#cfe6f5]" />
+      <button onClick={handleRescheduleRaid}
+        className="px-4 py-2.5 bg-[#17a2d9] text-white rounded-xl text-sm font-bold hover:bg-[#0e8ec0] shrink-0 transition-all active:scale-95">
+        옮기기
+      </button>
+    </div>
+  </div>
+)}
+{(isAdmin || selectedRaid?.created_by_email === user.email) && (
   <button onClick={toggleRaidClosed}
     className={`w-full mb-2 py-3 rounded-2xl font-bold text-sm transition-all border ${selectedRaid?.is_closed
       ? 'bg-[#8fa3ae] border-[#8fa3ae] text-white'
