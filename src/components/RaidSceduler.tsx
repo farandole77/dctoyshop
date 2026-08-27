@@ -348,7 +348,7 @@ export default function RaidScheduler() {
     setHelpRows(data || []);
   };
 
-  // ★ 고스트라이더 — 남는 자리를 잠가서 모집을 마감합니다.
+  // ★ 자리 잠금 — 남는 자리를 닫아 모집을 마감합니다.
   const toggleSlotBlock = async (slotIndex: number) => {
     if (!selectedRaid) return;
     const canEdit = isAdmin || selectedRaid.created_by_email === user.email;
@@ -1679,6 +1679,14 @@ export default function RaidScheduler() {
                         </>
                       ) : (
                         <>
+                          {dungeonTab === 'raid' && (
+                            <label className="shrink-0 w-8 h-8 rounded-lg border border-[#cfe6f5] cursor-pointer overflow-hidden relative" title="레이드 달력에 쓸 색상">
+                              <span className="absolute inset-0 pointer-events-none" style={{ background: row.color || '#f0b429' }} />
+                              <input type="color" className="opacity-0 w-full h-full cursor-pointer"
+                                value={row.color || '#f0b429'}
+                                onChange={e => handleDungeonColor(row, e.target.value)} />
+                            </label>
+                          )}
                           <span className="flex-1 px-2 font-bold text-sm text-[#164a63] truncate">{row.name}</span>
                           <button onClick={() => { setEditingId(row.id); setEditingName(row.name); }} className="p-2 text-[#6d94ac] hover:text-[#075f84] hover:bg-[#f5fbff] rounded-lg transition-all shrink-0" title="이름 수정"><Icons.Edit /></button>
                           <button onClick={() => handleDeleteDungeon(row)} className="p-2 text-[#6d94ac] hover:text-[#e0526a] hover:bg-[#f5fbff] rounded-lg transition-all shrink-0" title="삭제"><Icons.Trash /></button>
