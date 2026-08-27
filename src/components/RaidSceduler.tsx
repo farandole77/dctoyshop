@@ -367,12 +367,12 @@ export default function RaidScheduler() {
       //  · 길드원만으로 꽉 참 → [모집완료] 이름들
       //  · 자리를 닫아 채운 방 → 이름들 외 n명
       //  · 그 외    → [모집중] 이름들
-      const who = names.length > 0 ? names.join(', ') : '아직 없음';
+      const who = names.length > 0 ? names.join(', ') : '';
       let label: string;
-      if (ev.is_closed) label = `[마감] ${who}`;
-      else if (isFull && blocked > 0) label = `${who} 외 ${blocked}명`;
+      if (ev.is_closed) label = who ? `[마감] ${who}` : '[마감]';
+      else if (isFull && blocked > 0) label = who ? `${who} 외 ${blocked}명` : `${blocked}명`;
       else if (isFull) label = `[모집완료] ${who}`;
-      else label = `[모집중] ${who}`;
+      else label = who ? `[모집중] ${who}` : '[모집중]';
       if (ev.event_time) label = `${hourLabel(ev.event_time)} ${label}`;
 
       const base = ev.is_closed ? CLOSED_COLOR : eventColorOf(ev);
@@ -855,20 +855,54 @@ export default function RaidScheduler() {
     if (error) return alert('등록 실패: ' + error.message);
 
     if (newRaid) {
-      // 방장(=도와주는 사람) 참가
-      const rows: any[] = [{ raid_id: newRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }];
-      // 도와주기라면 요청한 사람도 함께 참가
+      // 1) 방장(=도와주는 사람) 참가 — 내 행이므로 바로 넣습니다.
+      const { error: pErr } = await supabase.from('participants').insert([{
+        raid_id: newRaid.id,
+        user_name: myProfile.nickname,
+        game_class: myProfile.game_class,
+        user_avatar: user.user_metadata?.avatar_url || null,
+        user_email: user.email,
+      }]);
+      if (pErr) alert('참가 등록 실패: ' + pErr.message);
+
+      // 2) 도와주기라면 요청한 사람도 함께 — 남의 행이라 서버를 거칩니다.
       if (helpingFor) {
-        rows.push({ raid_id: newRaid.id, user_name: helpingFor.nickname, game_class: helpingFor.game_class || '모험가', user_avatar: helpingFor.avatar_url || null, user_email: helpingFor.email || null });
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const res = await fetch('/api/participants/add', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raidId: newRaid.id, nickname: helpingFor.nickname }),
+          });
+          const out = await res.json().catch(() => ({}));
+          if (!res.ok) alert(`${helpingFor.nickname} 님 자동 참가 실패: ${out.error || res.status}`);
+        } catch (e: any) {
+          alert('자동 참가 중 문제가 생겼습니다: ' + (e?.message || e));
+        }
       }
-      await supabase.from('participants').insert(rows);
-      await fetchRaidCounts();
     }
     setHelpingFor(null);
-    setRaidTitle(''); setMaxMembers(4); setIsCreateModalOpen(false); fetchRaids(); 
+    setHelpingFor(null);
+    setRaidTitle(''); setMaxMembers(4); setIsCreateModalOpen(false);
+    await fetchRaids();
+    await fetchRaidCounts();
   };
   const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.extendedProps.realTitle || arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar, blocked_slots: arg.event.extendedProps.blocked_slots || [], is_closed: !!arg.event.extendedProps.is_closed, event_time: arg.event.extendedProps.event_time || '', helper_nickname: arg.event.extendedProps.helper_nickname || null, help_for_nickname: arg.event.extendedProps.help_for_nickname || null }); setParticipants(data || []); setEditDate(arg.event.startStr.split('T')[0]); setEditTime(arg.event.extendedProps.event_time || ''); setIsDetailModalOpen(true); };
-  const handleJoin = async () => { if (!myProfile) return alert('프로필 필요'); const limit = selectedRaid.max_members || 4; if (participants.length >= limit) return alert(`🚫 정원이 꽉 찼습니다! (최대 ${limit}명)`); await supabase.from('participants').insert([{ raid_id: selectedRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); refreshParticipants(selectedRaid.id); };
+  const handleJoin = async () => {
+    if (!myProfile) return alert('프로필 필요');
+    const limit = selectedRaid.max_members || 4;
+    const lockedCount = (selectedRaid.blocked_slots || []).length;
+    if (participants.length + lockedCount >= limit) return alert('🚫 자리가 없습니다.');
+    const { error } = await supabase.from('participants').insert([{
+      raid_id: selectedRaid.id,
+      user_name: myProfile.nickname,
+      game_class: myProfile.game_class,
+      user_avatar: user.user_metadata?.avatar_url || null,
+      user_email: user.email,
+    }]);
+    if (error) return alert('참가 실패: ' + error.message);
+    refreshParticipants(selectedRaid.id);
+  };
   const handleLeave = async () => { const isHost = selectedRaid.created_by_email === user.email; if (isHost && participants.length <= 1) { if (!confirm("파티가 해체됩니다. 삭제하시겠습니까?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); } else { if (!confirm("취소?")) return; await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email); refreshParticipants(selectedRaid.id); } };
   const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
   const refreshParticipants = async (raidId: any) => { const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setParticipants(data || []); await fetchRaidCounts(); };
