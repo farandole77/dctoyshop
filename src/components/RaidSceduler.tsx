@@ -266,6 +266,9 @@ export default function RaidScheduler() {
   const [editDate, setEditDate] = useState('');              // 등록 후 날짜 변경
   const [editTime, setEditTime] = useState('');
 
+  // ★ 도와주기 — 누구를 도우려고 방을 만드는 중인지
+  const [helpingFor, setHelpingFor] = useState<any>(null);
+
   // ★ 프로필: 인게임 캐릭터 정보
   const [newCharName, setNewCharName] = useState('');
   const [gig, setGig] = useState<{ [k: string]: string }>({});
@@ -382,7 +385,7 @@ export default function RaidScheduler() {
         backgroundColor: bg,
         borderColor: 'transparent',
         textColor: solid ? ensureLight(base) : mixBlack(base, 0.55),
-        extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title, blocked_slots: ev.blocked_slots || [], is_closed: !!ev.is_closed, event_time: ev.event_time || '' },
+        extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title, blocked_slots: ev.blocked_slots || [], is_closed: !!ev.is_closed, event_time: ev.event_time || '', helper_nickname: ev.helper_nickname || null, help_for_nickname: ev.help_for_nickname || null },
       };
     });
 
@@ -520,6 +523,29 @@ export default function RaidScheduler() {
 
     setSelectedRaid({ ...selectedRaid, is_closed: next });
     await fetchRaids();
+
+    // ★ 도와주기로 만든 방을 마감하면 도와준 사람에게 포인트를 줍니다.
+    if (next && selectedRaid.helper_nickname) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const res = await fetch('/api/points/award', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raidId: selectedRaid.id }),
+          });
+          const out = await res.json().catch(() => ({}));
+          if (out.awarded > 0) {
+            alert(`🎁 ${out.helper} 님에게 ${out.awarded}포인트가 지급되었습니다. (누적 ${out.total ?? '-'}P)`);
+            if (myProfile && out.helper === myProfile.nickname) {
+              setMyProfile({ ...myProfile, points: out.total });
+            }
+          }
+        }
+      } catch (e) {
+        console.error('포인트 지급 실패:', e);
+      }
+    }
   };
 
   // ★ 등록 후 날짜 · 시간 변경
@@ -537,6 +563,22 @@ export default function RaidScheduler() {
     setSelectedRaid({ ...selectedRaid, date: editDate, event_time: editTime });
     await fetchRaids();
     alert('일정을 옮겼습니다.');
+  };
+
+  // ★ [도와주기] — 기갱 달력에 방을 만들고, 요청자와 함께 자동 참가합니다.
+  const startHelping = async (h: any) => {
+    if (!myProfile) return alert('먼저 프로필을 설정해주세요.');
+    if (h.nickname === myProfile.nickname) return alert('본인 요청은 도울 수 없습니다.');
+
+    // 요청자 정보(직업 등)를 가져와 자동 참가에 씁니다.
+    const { data: target } = await supabase
+      .from('profiles').select('*').eq('nickname', h.nickname).maybeSingle();
+
+    setHelpingFor({ ...h, game_class: target?.game_class || '모험가', email: target?.email || null });
+    setRaidType('gigaeng');
+    setActiveCalendar('gigaeng');
+    setSelectedDate(todayKST());
+    setIsCreateModalOpen(true);
   };
 
   const initialize = async () => {
@@ -647,6 +689,8 @@ export default function RaidScheduler() {
         blocked_slots: raid.blocked_slots || [],
         is_closed: !!raid.is_closed,
         event_time: raid.event_time || '',
+        helper_nickname: raid.helper_nickname || null,
+        help_for_nickname: raid.help_for_nickname || null,
         calendar_type: raid.calendar_type || (isAbyssTitle(raid.title) ? 'gigaeng' : 'raid'),
       })));
     }
@@ -678,6 +722,8 @@ export default function RaidScheduler() {
       blocked_slots: raid.blocked_slots || [],
       is_closed: !!raid.is_closed,
       event_time: raid.event_time || '',
+      helper_nickname: raid.helper_nickname || null,
+      help_for_nickname: raid.help_for_nickname || null,
     });
     setParticipants(data || []);
     setEditDate(raid.date);
@@ -800,11 +846,28 @@ export default function RaidScheduler() {
 
   const handleCreate = async () => { 
     if (!selectedDungeon) return alert('던전 선택!'); const typeTag = calOf(raidType).tag; setActiveCalendar(raidType); const finalTitle = `${typeTag} ${selectedDungeon}`; 
-    const { data: newRaid, error } = await supabase.from('raids').insert([{ title: finalTitle, start_time: selectedDate, created_by_email: user.email, max_members: maxMembers, host_name: myProfile?.nickname || '알수없음', host_avatar: myProfile?.game_class || '모험가', calendar_type: raidType, event_time: eventTime || null }]).select().single();
-    if (newRaid) { await supabase.from('participants').insert([{ raid_id: newRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); }
+    const { data: newRaid, error } = await supabase.from('raids').insert([{ title: finalTitle, start_time: selectedDate, created_by_email: user.email, max_members: maxMembers, host_name: myProfile?.nickname || '알수없음', host_avatar: myProfile?.game_class || '모험가', calendar_type: raidType, event_time: eventTime || null,
+      // ★ 도와주기로 만든 방이면 누구를 돕는지 함께 남깁니다.
+      help_for_nickname: helpingFor?.nickname || null,
+      helper_nickname: helpingFor ? (myProfile?.nickname || null) : null,
+      help_request_id: helpingFor?.id || null,
+    }]).select().single();
+    if (error) return alert('등록 실패: ' + error.message);
+
+    if (newRaid) {
+      // 방장(=도와주는 사람) 참가
+      const rows: any[] = [{ raid_id: newRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }];
+      // 도와주기라면 요청한 사람도 함께 참가
+      if (helpingFor) {
+        rows.push({ raid_id: newRaid.id, user_name: helpingFor.nickname, game_class: helpingFor.game_class || '모험가', user_avatar: helpingFor.avatar_url || null, user_email: helpingFor.email || null });
+      }
+      await supabase.from('participants').insert(rows);
+      await fetchRaidCounts();
+    }
+    setHelpingFor(null);
     setRaidTitle(''); setMaxMembers(4); setIsCreateModalOpen(false); fetchRaids(); 
   };
-  const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.extendedProps.realTitle || arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar, blocked_slots: arg.event.extendedProps.blocked_slots || [], is_closed: !!arg.event.extendedProps.is_closed, event_time: arg.event.extendedProps.event_time || '' }); setParticipants(data || []); setEditDate(arg.event.startStr.split('T')[0]); setEditTime(arg.event.extendedProps.event_time || ''); setIsDetailModalOpen(true); };
+  const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.extendedProps.realTitle || arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar, blocked_slots: arg.event.extendedProps.blocked_slots || [], is_closed: !!arg.event.extendedProps.is_closed, event_time: arg.event.extendedProps.event_time || '', helper_nickname: arg.event.extendedProps.helper_nickname || null, help_for_nickname: arg.event.extendedProps.help_for_nickname || null }); setParticipants(data || []); setEditDate(arg.event.startStr.split('T')[0]); setEditTime(arg.event.extendedProps.event_time || ''); setIsDetailModalOpen(true); };
   const handleJoin = async () => { if (!myProfile) return alert('프로필 필요'); const limit = selectedRaid.max_members || 4; if (participants.length >= limit) return alert(`🚫 정원이 꽉 찼습니다! (최대 ${limit}명)`); await supabase.from('participants').insert([{ raid_id: selectedRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); refreshParticipants(selectedRaid.id); };
   const handleLeave = async () => { const isHost = selectedRaid.created_by_email === user.email; if (isHost && participants.length <= 1) { if (!confirm("파티가 해체됩니다. 삭제하시겠습니까?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); } else { if (!confirm("취소?")) return; await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email); refreshParticipants(selectedRaid.id); } };
   const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
@@ -936,6 +999,12 @@ export default function RaidScheduler() {
               <div key={h.id}>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-extrabold text-[#5b420a]">{h.nickname}</span>
+                  {myProfile && h.nickname !== myProfile.nickname && (
+                    <button onClick={() => startHelping(h)}
+                      className="text-[11px] font-extrabold bg-[#f0b429] text-[#4a3208] px-2.5 py-1 rounded-lg hover:bg-[#dda31f] active:scale-95 transition-all shadow-sm">
+                      도와주기
+                    </button>
+                  )}
                   {r && GIGAENG.map(g => (
                     <span key={g.key} className="text-[10px] font-bold px-1.5 py-0.5 rounded"
                       style={{ background: g.soft, color: g.color }}>
@@ -1314,6 +1383,11 @@ export default function RaidScheduler() {
           <div className="flex flex-col items-end cursor-pointer group" onClick={openEditProfile}>
             <div className="text-sm font-bold text-[#164a63] flex items-center gap-1"><span className="hidden md:inline">{myProfile ? myProfile.nickname : '설정필요'}</span><span className="md:hidden">{myProfile ? myProfile.nickname.slice(0,4)+'..' : '설정'}</span></div>
             <div className="text-xs text-[#5d87a1] font-medium hidden md:block">{myProfile ? myProfile.game_class : ''}</div>
+            {myProfile && myProfile.points > 0 && (
+              <div className="text-[10px] font-extrabold text-[#8a6a1e] bg-[#fff6e0] px-1.5 py-0.5 rounded mt-0.5">
+                {myProfile.points.toLocaleString()}P
+              </div>
+            )}
           </div>
           <div className="relative group cursor-pointer" onClick={openEditProfile}>{myProfile ? renderAvatar(myProfile.game_class, "w-9 h-9 md:w-10 md:h-10") : <div className="w-9 h-9 bg-[#cfe6f5] rounded-full"/>}</div>
           <button onClick={handleLogout} className="p-2 text-[#6d94ac] hover:text-[#e0526a] hover:bg-[#ffe7eb] rounded-full transition-all" title="로그아웃"><Icons.Logout /></button>
@@ -1542,10 +1616,24 @@ export default function RaidScheduler() {
       </nav>
 
       {/* --- 모달들 (기존과 동일) --- */}
-      {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-start md:items-center z-[9999] p-4 overflow-y-auto overscroll-contain animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center max-h-[90dvh] overflow-y-auto overscroll-contain my-auto"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{classNames().map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">인게임 캐릭터명</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" placeholder="랭킹에 표시할 캐릭터명" value={newCharName} onChange={(e) => setNewCharName(e.target.value)} /><p className="text-[10px] text-[#87a9bd] mt-1.5 ml-1">공식 랭킹 1,000위 안에 들면 점수가 자동으로 채워집니다.</p></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">어비스 기갱 (선택)</label><div className="space-y-2">{GIGAENG.map(g => (<div key={g.key} className="flex items-center gap-2"><span className="w-11 shrink-0 text-center text-[11px] font-extrabold py-2 rounded-lg" style={{ background: g.soft, color: g.color }}>{g.label}</span><input className="flex-1 min-w-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="점수" value={gig[`${g.key}_score`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_score`]: e.target.value })} /><input className="w-20 shrink-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="426" value={gig[`${g.key}_seconds`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_seconds`]: e.target.value })} /></div>))}</div><p className="text-[10px] text-[#87a9bd] mt-2 ml-1 leading-relaxed">시간은 <b>426 → 4분 26초</b> 처럼 적습니다. (뒤 두 자리가 초)<br />비워두어도 됩니다. PC에서 자동 전송을 쓰면 접속할 때마다 갱신됩니다.</p>{myProfile?.ingest_token && (<div className="mt-2 bg-[#eef7fe] rounded-xl p-2.5"><div className="text-[10px] font-bold text-[#6d94ac] mb-1">내 전송 토큰</div><code className="block text-[10px] text-[#4a7d97] break-all select-all">{myProfile.ingest_token}</code></div>)}</div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
+      {isProfileModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-start md:items-center z-[9999] p-4 overflow-y-auto overscroll-contain animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-6 md:p-8 rounded-[2rem] shadow-2xl w-full max-w-sm text-center max-h-[90dvh] overflow-y-auto overscroll-contain my-auto"><h2 className="text-2xl font-bold mb-2 text-[#0f3f57]">{myProfile ? '프로필 수정' : '환영합니다!'}</h2><p className="text-[#5d87a1] mb-8 text-sm">정보를 입력해주세요.</p><div className="space-y-5"><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">닉네임</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" value={newNickname} onChange={(e) => setNewNickname(e.target.value)} /></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">직업</label><select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none" value={newClass} onChange={(e) => setNewClass(e.target.value)}>{classNames().map(cls => (<option key={cls} value={cls}>{cls}</option>))}</select></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">인게임 캐릭터명</label><input className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all" placeholder="랭킹에 표시할 캐릭터명" value={newCharName} onChange={(e) => setNewCharName(e.target.value)} /><p className="text-[10px] text-[#87a9bd] mt-1.5 ml-1">공식 랭킹 1,000위 안에 들면 점수가 자동으로 채워집니다.</p></div><div className="text-left"><label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">어비스 기갱 (선택)</label><div className="space-y-2">{GIGAENG.map(g => (<div key={g.key} className="flex items-center gap-2"><span className="w-11 shrink-0 text-center text-[11px] font-extrabold py-2 rounded-lg" style={{ background: g.soft, color: g.color }}>{g.label}</span><input className="flex-1 min-w-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="점수" value={gig[`${g.key}_score`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_score`]: e.target.value })} /><input className="w-20 shrink-0 bg-[#eef7fe] px-2 py-2.5 rounded-xl font-bold text-center text-sm outline-none focus:ring-2 focus:ring-[#17a2d9]" inputMode="numeric" placeholder="426" value={gig[`${g.key}_seconds`] || ''} onChange={(e) => setGig({ ...gig, [`${g.key}_seconds`]: e.target.value })} /></div>))}</div><p className="text-[10px] text-[#87a9bd] mt-2 ml-1 leading-relaxed">시간은 <b>426 → 4분 26초</b> 처럼 적습니다. (뒤 두 자리가 초)<br />비워두어도 됩니다. PC에서 자동 전송을 쓰면 접속할 때마다 갱신됩니다.</p>{myProfile?.ingest_token && (<div className="mt-2 bg-[#eef7fe] rounded-xl p-2.5"><div className="text-[10px] font-bold text-[#6d94ac] mb-1">내 전송 토큰</div><code className="block text-[10px] text-[#4a7d97] break-all select-all">{myProfile.ingest_token}</code></div>)}</div><div className="bg-[#fff6e0] p-3 rounded-2xl flex items-center justify-between border border-[#f7dfa4]"><span className="text-xs font-bold text-[#8a6a1e]">보유 포인트</span><span className="text-lg font-extrabold text-[#7a5a0c]">{(myProfile?.points || 0).toLocaleString()}P</span></div><div className="bg-[#e4f4fd] p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#cfeafa]"><span className="text-xs font-bold text-[#0b7fae]">미리보기</span>{renderAvatar(newClass, "w-16 h-16")}</div></div><div className="flex gap-3 mt-8">{myProfile && <button onClick={() => setIsProfileModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9]">취소</button>}<button onClick={handleSaveProfile} className="flex-1 bg-[#17a2d9] text-white py-4 rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">저장</button></div></div></div>)}
       
       {/* ★ 등록 모달 (날짜 선택 수정됨) */}
-      {isCreateModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-start md:items-center z-[9999] p-4 overflow-y-auto overscroll-contain animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative max-h-[90dvh] overflow-y-auto overscroll-contain my-auto"><h2 className="text-2xl font-bold mb-1 text-[#0f3f57]">일정 등록</h2><input type="date" className="w-full bg-[#eef7fe] p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-[#17a2d9] font-medium text-[#4a7d97] cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-4">{CALENDARS.map(c => (<button key={c.key} onClick={() => setRaidType(c.key)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${raidType === c.key ? 'bg-[#ffffff] shadow-sm' : 'text-[#6d94ac]'}`} style={raidType === c.key ? { color: c.full } : undefined}>{c.label}</button>))}</div><div className="mb-4 text-left">
+      {isCreateModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-start md:items-center z-[9999] p-4 overflow-y-auto overscroll-contain animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative max-h-[90dvh] overflow-y-auto overscroll-contain my-auto"><h2 className="text-2xl font-bold mb-1 text-[#0f3f57]">일정 등록</h2><input type="date" className="w-full bg-[#eef7fe] p-3 rounded-xl mb-6 outline-none focus:ring-2 focus:ring-[#17a2d9] font-medium text-[#4a7d97] cursor-pointer" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} /><div className="flex bg-[#e6f2fb] p-1 rounded-xl mb-4">{CALENDARS.map(c => (<button key={c.key} onClick={() => setRaidType(c.key)} className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${raidType === c.key ? 'bg-[#ffffff] shadow-sm' : 'text-[#6d94ac]'}`} style={raidType === c.key ? { color: c.full } : undefined}>{c.label}</button>))}</div>{helpingFor && (
+        <div className="mb-4 bg-[#fff6e0] border border-[#f7dfa4] rounded-2xl p-3 text-left">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-extrabold bg-[#f0b429] text-[#4a3208] px-2 py-0.5 rounded">🙋 도와주기</span>
+            <span className="text-sm font-extrabold text-[#5b420a]">{helpingFor.nickname} 님 돕기</span>
+          </div>
+          <p className="text-[11px] text-[#8a6a1e] leading-relaxed">
+            방을 만들면 {helpingFor.nickname} 님과 내가 자동으로 참가합니다.
+            던전을 돌고 <b>마감</b>하면 포인트를 받습니다.
+          </p>
+          {helpingFor.message && <p className="text-[11px] text-[#7a5a0c] mt-1">“{helpingFor.message}”</p>}
+        </div>
+      )}
+
+      <div className="mb-4 text-left">
         <label className="block text-xs font-bold text-[#6d94ac] mb-2 ml-1">시작 시간</label>
         <div className="flex items-center gap-2">
           <input type="time" step={600} value={eventTime} onChange={(e) => setEventTime(e.target.value)}
@@ -1568,12 +1656,17 @@ export default function RaidScheduler() {
           {true && (<button onClick={openDungeonModal} className="flex items-center gap-1 text-xs font-bold text-[#0b7fae] hover:text-[#075f84] transition-colors"><Icons.Edit /> 목록 편집</button>)}
         </div>
         <select className="w-full bg-[#eef7fe] p-4 rounded-2xl font-bold text-center outline-none focus:ring-2 focus:ring-[#17a2d9] cursor-pointer appearance-none text-lg" value={selectedDungeon} onChange={(e) => setSelectedDungeon(e.target.value)}>{dungeonList(calOf(raidType).dungeonType).map(dungeon => (<option key={dungeon} value={dungeon}>{dungeon}</option>))}</select>
-      </div><div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-[#17a2d9] bg-[#e4f4fd] text-[#075f84]' : 'border-[#cfe6f5] text-[#6d94ac] hover:border-[#a7d1e9]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-[#17a2d9] bg-[#e4f4fd] text-[#075f84]' : 'border-[#cfe6f5] text-[#6d94ac] hover:border-[#a7d1e9]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div><div className="flex gap-3"><button onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9] transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-[#17a2d9] text-white rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">등록</button></div></div></div>)}
+      </div><div className="flex gap-3 mb-8"><button onClick={() => setMaxMembers(4)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 4 ? 'border-[#17a2d9] bg-[#e4f4fd] text-[#075f84]' : 'border-[#cfe6f5] text-[#6d94ac] hover:border-[#a7d1e9]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">4</span></div><span className="text-xs">파티</span></button><button onClick={() => setMaxMembers(8)} className={`flex-1 py-3 rounded-2xl font-bold border-2 transition-all flex flex-col items-center justify-center gap-1 ${maxMembers === 8 ? 'border-[#17a2d9] bg-[#e4f4fd] text-[#075f84]' : 'border-[#cfe6f5] text-[#6d94ac] hover:border-[#a7d1e9]'}`}><div className="flex gap-1"><Icons.UserGroup /><span className="text-lg">8</span></div><span className="text-xs">공대</span></button></div><div className="flex gap-3"><button onClick={() => { setIsCreateModalOpen(false); setHelpingFor(null); }} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9] transition-colors">취소</button><button onClick={handleCreate} className="flex-1 py-4 bg-[#17a2d9] text-white rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all">등록</button></div></div></div>)}
 
       {isWriteModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-start md:items-center z-[9999] p-4 overflow-y-auto overscroll-contain animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative max-h-[90dvh] overflow-y-auto overscroll-contain my-auto"><h2 className="text-2xl font-bold mb-6 text-[#0f3f57] flex items-center gap-2"><Icons.Board /> 팁 작성하기</h2><input className="w-full bg-[#eef7fe] p-4 rounded-2xl mb-4 outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all font-bold" placeholder="제목을 입력하세요" value={postTitle} onChange={e => setPostTitle(e.target.value)} autoFocus /><textarea className="w-full bg-[#eef7fe] p-4 rounded-2xl mb-8 outline-none focus:ring-2 focus:ring-[#17a2d9] transition-all h-40 resize-none" placeholder="내용을 작성해주세요." value={postContent} onChange={e => setPostContent(e.target.value)} /><div className="mb-6"><div className="flex gap-2 mb-2"><div className="flex-1"><input type="file" accept="image/*" id="img-upload" className="hidden" onChange={handleImageSelect} /><label htmlFor="img-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#e6f2fb] rounded-xl cursor-pointer hover:bg-[#d9edf9] transition-all text-xs font-bold border border-dashed border-[#a7d1e9]"><Icons.Camera /> {selectedImage ? '사진 변경' : '사진 첨부'}</label></div><div className="flex-1"><input type="file" id="file-upload" className="hidden" onChange={handleFileSelect} /><label htmlFor="file-upload" className="flex items-center justify-center gap-2 w-full py-3 bg-[#e6f2fb] rounded-xl cursor-pointer hover:bg-[#d9edf9] transition-all text-xs font-bold border border-dashed border-[#a7d1e9]"><Icons.Clip /> {selectedFile ? '파일 변경' : '파일 첨부'}</label></div></div>{(previewUrl || selectedFile) && (<div className="space-y-2">{previewUrl && (<div className="relative w-full h-32 rounded-xl overflow-hidden border border-[#b9dcf0]"><img src={previewUrl} className="w-full h-full object-cover" alt="미리보기" /><button onClick={() => { setSelectedImage(null); setPreviewUrl(''); }} className="absolute top-1 right-1 bg-[#0d3c52]/45 text-white rounded-full p-1"><Icons.Close /></button></div>)}{selectedFile && (<div className="flex items-center justify-between bg-[#e4f4fd] p-3 rounded-xl border border-[#cfeafa]"><div className="flex items-center gap-2 overflow-hidden"><Icons.File /><span className="text-xs font-bold text-[#075f84] truncate">{selectedFile.name}</span></div><button onClick={() => setSelectedFile(null)} className="text-[#6d94ac] hover:text-[#e0526a]"><Icons.Close /></button></div>)}</div>)}</div><div className="flex gap-3"><button onClick={() => setIsWriteModalOpen(false)} className="flex-1 py-4 bg-[#e6f2fb] text-[#4a7d97] rounded-2xl font-bold hover:bg-[#d9edf9] transition-colors">취소</button><button onClick={handleWritePost} disabled={uploading} className="flex-1 py-4 bg-[#17a2d9] text-white rounded-2xl font-bold hover:bg-[#0e8ec0] shadow-lg transition-all disabled:bg-[#8fb9cf]">{uploading ? '업로드 중...' : '작성완료'}</button></div></div></div>)}
       {isDetailModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-start md:items-center z-[9999] p-4 overflow-y-auto overscroll-contain animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden max-h-[90dvh] overflow-y-auto overscroll-contain my-auto"><div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-[#17a2d9]' : 'bg-[#ff7a8a]'}`}></div><div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-[#87a9bd] hover:text-[#e0526a] p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-[#87a9bd] hover:text-[#0f3f57] p-2 transition-all"><Icons.Close /></button></div><h2 className="text-2xl font-extrabold mb-2 pr-20 text-[#0f3f57] leading-tight">{selectedRaid?.title}</h2><div className="flex items-center gap-2 mb-6 bg-[#eef7fe] p-2 rounded-xl border border-[#cfe6f5] w-fit"><span className="text-xs text-[#6d94ac] font-bold">HOST</span>{selectedRaid?.host_avatar && renderAvatar(selectedRaid.host_avatar, "w-5 h-5")}<span className="text-sm font-bold text-[#265d75]">{selectedRaid?.host_name || '알수없음'}</span></div><div className="bg-[#eef7fe] p-5 rounded-3xl mb-6 border border-[#cfe6f5]">
   <p className="text-xs font-bold text-[#6d94ac] mb-3 uppercase tracking-wider flex items-center justify-between">
     <span>참가자 현황</span>
+    {selectedRaid?.helper_nickname && (
+      <span className="px-2 py-1 rounded-full text-xs bg-[#fff6e0] text-[#8a6a1e] mr-1">
+        🙋 {selectedRaid.helper_nickname} → {selectedRaid.help_for_nickname}
+      </span>
+    )}
     <span className={`px-2 py-1 rounded-full text-xs ${selectedRaid?.is_closed ? 'bg-[#e6edf1] text-[#5b6b76]' : slotState.isFull ? 'bg-[#ffe7eb] text-[#e0526a]' : 'bg-[#cfeafa] text-[#0b7fae]'}`}>
       {selectedRaid?.is_closed ? '마감' : slotState.isFull ? '모집완료' : '모집중'} · {participants.length} / {slotState.max}명
     </span>
@@ -1639,7 +1732,7 @@ export default function RaidScheduler() {
     className={`w-full mb-2 py-3 rounded-2xl font-bold text-sm transition-all border ${selectedRaid?.is_closed
       ? 'bg-[#8fa3ae] border-[#8fa3ae] text-white'
       : 'bg-[#ffffff] border-[#cfe6f5] text-[#4a7d97] hover:bg-[#eef7fe]'}`}>
-    {selectedRaid?.is_closed ? '✅ 마감됨 — 되돌리려면 누르세요' : '🏁 마감하기 (던전 완료)'}
+    {selectedRaid?.is_closed ? '✅ 마감됨 — 되돌리려면 누르세요' : (selectedRaid?.helper_nickname ? '🏁 마감하기 (완료 시 포인트 지급)' : '🏁 마감하기 (던전 완료)')}
   </button>
 )}
 <div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-[#e6f2fb] text-[#265d75] rounded-2xl font-bold hover:bg-[#d9edf9] text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-[#fff1f4] text-[#e0526a] rounded-2xl font-bold hover:bg-[#ffdde4] text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={slotState.isFull} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${slotState.isFull ? 'bg-[#8fb9cf] cursor-not-allowed' : 'bg-[#17a2d9] hover:bg-[#0e8ec0] active:scale-95'}`}>{slotState.isFull ? '모집 마감' : '참가하기'}</button>)}</div></div></div>)}
