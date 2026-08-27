@@ -151,3 +151,15 @@ select option { background: var(--surface); color: var(--text); }
 .fc-list-day-cushion { background: var(--surface-2) !important; color: var(--text) !important; }
 .fc-list-event td { border-color: var(--divider) !important; }
 .fc-list-empty { background: transparent !important; color: var(--muted) !important; }
+
+/* ============================================================
+   모바일에서 모달이 잘리지 않도록
+   ============================================================ */
+/* 주소창이 접혔다 펴지는 모바일 브라우저에서 100vh 는 실제 화면보다
+   큽니다. dvh 를 못 쓰는 구형 브라우저를 위한 대비값입니다. */
+@supports not (height: 100dvh) {
+  .max-h-\[90dvh\] { max-height: 85vh; }
+}
+
+/* iOS 사파리에서 모달 안을 스크롤할 때 뒤 배경이 같이 밀리는 것 방지 */
+.overscroll-contain { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
