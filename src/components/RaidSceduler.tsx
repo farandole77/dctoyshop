@@ -51,35 +51,41 @@ const TYPE_TAG: { [key: string]: string } = { abyss: '[어비스]', raid: '[레�
 // 어비스 계열인지 (참여 횟수 분류 등에 씁니다)
 const isAbyssTitle = (title: string) => title.includes('어비스') || title.includes('지옥');
 
-/* ── 달력 3종 ──────────────────────────────────────────────
-   gigaeng : 어비스 기갱용 (지옥2)   — 파랑
-   explore : 어비스 타임어택 및 숙제      — 청록
-   raid    : 레이드                   — 호박색                        */
+/* ── 색 유틸 ───────────────────────────────────────────────
+   진한 색 하나만 정하면 파스텔 톤은 자동으로 계산합니다.        */
+const mixWhite = (hex: string, ratio: number) => {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const m = (v: number) => Math.round(v + (255 - v) * ratio);
+  return `#${[m(r), m(g), m(b)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+};
+const isDarkOn = (hex: string) => {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return (r * 299 + g * 587 + b * 114) / 1000 < 150; // 어두우면 흰 글씨
+};
+
+/* ── 달력 4종 ──────────────────────────────────────────────
+   기갱     : 파랑
+   타임어택 : 빨강
+   숙제     : 초록
+   레이드   : 던전별로 색을 따로 지정 (던전 목록 관리에서 변경)   */
 const CALENDARS = [
-  {
-    key: 'gigaeng', label: '기갱용', title: '어비스 기갱용 달력 (지옥2)',
-    dungeonType: 'abyss' as const, tag: '[어비스]',
-    full: '#2f5fe0', fullText: '#ffffff', open: '#bcd4fb', openText: '#123a75',
-    legend: [{ c: '#2f5fe0', t: '모집완료' }, { c: '#bcd4fb', t: '모집중' }],
-  },
-  {
-    key: 'explore', label: '타임어택·숙제', title: '어비스 타임어택 및 숙제 달력',
-    dungeonType: 'abyss' as const, tag: '[어비스]',
-    full: '#2e8b84', fullText: '#ffffff', open: '#bfe6e0', openText: '#14514c',
-    legend: [{ c: '#2e8b84', t: '모집완료' }, { c: '#bfe6e0', t: '모집중' }],
-  },
-  {
-    key: 'raid', label: '레이드', title: '레이드 달력',
-    dungeonType: 'raid' as const, tag: '[레이드]',
-    full: '#f0b429', fullText: '#4a3208', open: '#fbe0bc', openText: '#6b4a12',
-    legend: [{ c: '#f0b429', t: '모집완료' }, { c: '#fbe0bc', t: '모집중' }],
-  },
+  { key: 'gigaeng',    label: '기갱',     title: '어비스 기갱 달력',     dungeonType: 'abyss' as const, tag: '[어비스]', full: '#2f5fe0' },
+  { key: 'timeattack', label: '타임어택', title: '어비스 타임어택 달력', dungeonType: 'abyss' as const, tag: '[어비스]', full: '#d9394f' },
+  { key: 'homework',   label: '숙제',     title: '어비스 숙제 달력',     dungeonType: 'abyss' as const, tag: '[어비스]', full: '#2e8b57' },
+  { key: 'raid',       label: '레이드',   title: '레이드 달력',          dungeonType: 'raid'  as const, tag: '[레이드]', full: '#f0b429', perDungeon: true },
 ];
+
+const CLOSED_COLOR = '#8fa3ae';   // 마감된 일정
+
 /* ── 어비스 기갱 3종 ───────────────────────────────────── */
 const GIGAENG = [
   { key: 'heosang', label: '허상', color: '#7c5cd6', soft: '#ece5fb' },
   { key: 'gwanggi', label: '광기', color: '#d1495b', soft: '#fbe3e6' },
-  { key: 'mulgil',  label: '물길', color: '#1c86b8', soft: '#dcefF9' },
+  { key: 'mulgil',  label: '물길', color: '#1c86b8', soft: '#dceff9' },
 ];
 
 // 오늘 (KST) — 조기 반환 위에서도 쓰이므로 모듈 최상단에 둡니다.
@@ -278,24 +284,48 @@ export default function RaidScheduler() {
     if (activeTab === 'admin') fetchAllProfiles();
   }, [activeTab]);
 
+  // ★ 레이드는 던전별 색, 나머지는 달력 고유색
+  const eventColorOf = (ev: any) => {
+    const cal = calOf(ev.calendar_type);
+    if (!cal.perDungeon) return cal.full;
+    // 제목에서 던전 이름을 찾아 그 던전에 지정된 색을 씁니다.
+    const name = (ev.title || '').replace(/^\[[^\]]*\]\s*/, '').trim();
+    const hit = dungeons.find(d => d.type === 'raid' && d.name === name);
+    return hit?.color || cal.full;
+  };
+
   // ★ 달력에 표시할 이벤트
-  //    제목 자리에 [모집중]/[모집완료] 와 참가자 닉네임을 넣습니다.
   const calendarEvents = raids
     .filter(ev => ev.calendar_type === activeCalendar)
     .map(ev => {
-      const cal = calOf(ev.calendar_type);
       const names = raidNames[ev.id] || [];
       const max = ev.max_members || 4;
       const blocked = (ev.blocked_slots || []).length;
       const isFull = names.length + blocked >= max;
+
+      // 라벨 규칙
+      //  · 마감    → [마감] 이름들
+      //  · 길드원만으로 꽉 참 → [모집완료] 이름들
+      //  · 자리를 닫아 채운 방 → 이름들 외 n명
+      //  · 그 외    → [모집중] 이름들
       const who = names.length > 0 ? names.join(', ') : '아직 없음';
+      let label: string;
+      if (ev.is_closed) label = `[마감] ${who}`;
+      else if (isFull && blocked > 0) label = `${who} 외 ${blocked}명`;
+      else if (isFull) label = `[모집완료] ${who}`;
+      else label = `[모집중] ${who}`;
+
+      const base = ev.is_closed ? CLOSED_COLOR : eventColorOf(ev);
+      const solid = isFull || ev.is_closed;            // 꽉 찼거나 마감이면 진한 색
+      const bg = solid ? base : mixWhite(base, 0.72);  // 모집중은 파스텔
+
       return {
         ...ev,
-        title: `[${isFull ? '모집완료' : '모집중'}] ${who}`,
-        backgroundColor: isFull ? cal.full : cal.open,
+        title: label,
+        backgroundColor: bg,
         borderColor: 'transparent',
-        textColor: isFull ? cal.fullText : cal.openText,
-        extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title, blocked_slots: ev.blocked_slots || [] },
+        textColor: solid ? (isDarkOn(base) ? '#ffffff' : '#3d2c00') : '#33414d',
+        extendedProps: { ...(ev.extendedProps || {}), realTitle: ev.title, blocked_slots: ev.blocked_slots || [], is_closed: !!ev.is_closed },
       };
     });
 
@@ -417,6 +447,24 @@ export default function RaidScheduler() {
   };
   // ====================================================
 
+  // ★ 마감 — 이미 던전을 돌았다는 표시
+  const toggleRaidClosed = async () => {
+    if (!selectedRaid) return;
+    const canEdit = isAdmin || selectedRaid.created_by_email === user.email;
+    if (!canEdit) return alert('파티장만 마감할 수 있습니다.');
+
+    const next = !selectedRaid.is_closed;
+    if (next && !confirm('이 일정을 마감할까요?\n(이미 던전을 돌았다는 표시입니다)')) return;
+
+    const { error } = await supabase.from('raids')
+      .update({ is_closed: next, closed_at: next ? new Date().toISOString() : null })
+      .eq('id', selectedRaid.id);
+    if (error) return alert('변경 실패: ' + error.message);
+
+    setSelectedRaid({ ...selectedRaid, is_closed: next });
+    await fetchRaids();
+  };
+
   const initialize = async () => {
     setIsLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
@@ -517,6 +565,7 @@ export default function RaidScheduler() {
         created_by_email: raid.created_by_email, host_name: raid.host_name, host_avatar: raid.host_avatar,
         max_members: raid.max_members,
         blocked_slots: raid.blocked_slots || [],
+        is_closed: !!raid.is_closed,
         calendar_type: raid.calendar_type || (isAbyssTitle(raid.title) ? 'gigaeng' : 'raid'),
       })));
     }
@@ -546,6 +595,7 @@ export default function RaidScheduler() {
       created_by_email: raid.created_by_email, max_members: raid.max_members || 4,
       host_name: raid.host_name, host_avatar: raid.host_avatar,
       blocked_slots: raid.blocked_slots || [],
+      is_closed: !!raid.is_closed,
     });
     setParticipants(data || []);
     setIsDetailModalOpen(true);
@@ -607,6 +657,13 @@ export default function RaidScheduler() {
     await fetchDungeons();
   };
 
+  // ★ 레이드 던전별 색상
+  const handleDungeonColor = async (row: any, color: string) => {
+    const { error } = await supabase.from('dungeons').update({ color }).eq('id', row.id);
+    if (error) return alert('색상 변경 실패: ' + error.message);
+    setDungeons(dungeons.map(d => d.id === row.id ? { ...d, color } : d));
+  };
+
   const handleDeleteDungeon = async (row: any) => {
     if (!confirm(`'${row.name}' 던전을 목록에서 삭제할까요?\n(이미 등록된 일정은 그대로 남습니다)`)) return;
     const { error } = await supabase.from('dungeons').delete().eq('id', row.id);
@@ -663,7 +720,7 @@ export default function RaidScheduler() {
     if (newRaid) { await supabase.from('participants').insert([{ raid_id: newRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); }
     setRaidTitle(''); setMaxMembers(4); setIsCreateModalOpen(false); fetchRaids(); 
   };
-  const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.extendedProps.realTitle || arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar, blocked_slots: arg.event.extendedProps.blocked_slots || [] }); setParticipants(data || []); setIsDetailModalOpen(true); };
+  const handleEventClick = async (arg: any) => { const raidId = arg.event.id; const title = arg.event.extendedProps.realTitle || arg.event.title; const createdBy = arg.event.extendedProps.created_by_email; const max = arg.event.extendedProps.max_members || 4; const hostName = arg.event.extendedProps.host_name; const hostAvatar = arg.event.extendedProps.host_avatar; const { data } = await supabase.from('participants').select('*').eq('raid_id', raidId); setSelectedRaid({ id: raidId, title, date: arg.event.startStr, created_by_email: createdBy, max_members: max, host_name: hostName, host_avatar: hostAvatar, blocked_slots: arg.event.extendedProps.blocked_slots || [], is_closed: !!arg.event.extendedProps.is_closed }); setParticipants(data || []); setIsDetailModalOpen(true); };
   const handleJoin = async () => { if (!myProfile) return alert('프로필 필요'); const limit = selectedRaid.max_members || 4; if (participants.length >= limit) return alert(`🚫 정원이 꽉 찼습니다! (최대 ${limit}명)`); await supabase.from('participants').insert([{ raid_id: selectedRaid.id, user_name: myProfile.nickname, game_class: myProfile.game_class, user_avatar: user.user_metadata.avatar_url, user_email: user.email }]); refreshParticipants(selectedRaid.id); };
   const handleLeave = async () => { const isHost = selectedRaid.created_by_email === user.email; if (isHost && participants.length <= 1) { if (!confirm("파티가 해체됩니다. 삭제하시겠습니까?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); } else { if (!confirm("취소?")) return; await supabase.from('participants').delete().eq('raid_id', selectedRaid.id).eq('user_email', user.email); refreshParticipants(selectedRaid.id); } };
   const handleDeleteRaid = async () => { if (!confirm("삭제?")) return; await supabase.from('raids').delete().eq('id', selectedRaid.id); setIsDetailModalOpen(false); fetchRaids(); };
@@ -1088,12 +1145,22 @@ export default function RaidScheduler() {
               {/* ★ 제목 + 범례 */}
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-1">
                 <h3 className="text-base md:text-lg font-extrabold text-[#0f3f57]">{calOf(activeCalendar).title}</h3>
-                <div className="flex items-center gap-3">
-                  {calOf(activeCalendar).legend.map(l => (
-                    <span key={l.t} className="flex items-center gap-1.5 text-[11px] font-bold text-[#4a7d97]">
-                      <span className="w-3.5 h-3.5 rounded" style={{ background: l.c }} />{l.t}
-                    </span>
-                  ))}
+                <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap justify-end">
+                  {calOf(activeCalendar).perDungeon
+                    ? dungeons.filter(d => d.type === 'raid').slice(0, 8).map(d => (
+                        <span key={d.id} className="flex items-center gap-1.5 text-[11px] font-bold text-[#4a7d97]">
+                          <span className="w-3.5 h-3.5 rounded" style={{ background: d.color || calOf(activeCalendar).full }} />{d.name}
+                        </span>
+                      ))
+                    : [{ c: calOf(activeCalendar).full, t: '모집완료' },
+                       { c: mixWhite(calOf(activeCalendar).full, 0.72), t: '모집중' }].map(l => (
+                        <span key={l.t} className="flex items-center gap-1.5 text-[11px] font-bold text-[#4a7d97]">
+                          <span className="w-3.5 h-3.5 rounded" style={{ background: l.c }} />{l.t}
+                        </span>
+                      ))}
+                  <span className="flex items-center gap-1.5 text-[11px] font-bold text-[#4a7d97]">
+                    <span className="w-3.5 h-3.5 rounded" style={{ background: CLOSED_COLOR }} />마감
+                  </span>
                 </div>
               </div>
 
@@ -1387,8 +1454,8 @@ export default function RaidScheduler() {
       {isDetailModalOpen && (<div className="fixed inset-0 bg-[#0d3c52]/45 backdrop-blur-md flex justify-center items-center z-[9999] p-4 animate-in fade-in zoom-in-95 duration-200"><div className="bg-[#ffffff] p-8 rounded-[2rem] shadow-2xl w-full max-w-md relative overflow-hidden"><div className={`absolute top-0 left-0 w-full h-2 ${selectedRaid?.title?.includes('어비스') || selectedRaid?.title?.includes('지옥') ? 'bg-[#17a2d9]' : 'bg-[#ff7a8a]'}`}></div><div className="absolute top-5 right-5 flex gap-2">{isMyRaid && (<button onClick={handleDeleteRaid} className="text-[#87a9bd] hover:text-[#e0526a] p-2 transition-all"><Icons.Trash /></button>)}<button onClick={() => setIsDetailModalOpen(false)} className="text-[#87a9bd] hover:text-[#0f3f57] p-2 transition-all"><Icons.Close /></button></div><h2 className="text-2xl font-extrabold mb-2 pr-20 text-[#0f3f57] leading-tight">{selectedRaid?.title}</h2><div className="flex items-center gap-2 mb-6 bg-[#eef7fe] p-2 rounded-xl border border-[#cfe6f5] w-fit"><span className="text-xs text-[#6d94ac] font-bold">HOST</span>{selectedRaid?.host_avatar && renderAvatar(selectedRaid.host_avatar, "w-5 h-5")}<span className="text-sm font-bold text-[#265d75]">{selectedRaid?.host_name || '알수없음'}</span></div><div className="bg-[#eef7fe] p-5 rounded-3xl mb-6 border border-[#cfe6f5]">
   <p className="text-xs font-bold text-[#6d94ac] mb-3 uppercase tracking-wider flex items-center justify-between">
     <span>참가자 현황</span>
-    <span className={`px-2 py-1 rounded-full text-xs ${slotState.isFull ? 'bg-[#ffe7eb] text-[#e0526a]' : 'bg-[#cfeafa] text-[#0b7fae]'}`}>
-      {slotState.isFull ? '모집완료' : '모집중'} · {participants.length} / {slotState.max}명
+    <span className={`px-2 py-1 rounded-full text-xs ${selectedRaid?.is_closed ? 'bg-[#e6edf1] text-[#5b6b76]' : slotState.isFull ? 'bg-[#ffe7eb] text-[#e0526a]' : 'bg-[#cfeafa] text-[#0b7fae]'}`}>
+      {selectedRaid?.is_closed ? '마감' : slotState.isFull ? '모집완료' : '모집중'} · {participants.length} / {slotState.max}명
     </span>
   </p>
 
@@ -1411,10 +1478,9 @@ export default function RaidScheduler() {
       if (slot.kind === 'blocked') {
         return (
           <button key={slot.index} onClick={() => toggleSlotBlock(slot.index)} disabled={!canEdit}
-            title={canEdit ? '눌러서 자리 열기' : '파티장이 잠근 자리입니다'}
-            className={`aspect-square rounded-2xl border-2 border-dashed border-[#b9dcf0] bg-[#e6f2fb] flex flex-col items-center justify-center gap-0.5 relative overflow-hidden ${canEdit ? 'hover:border-[#8fb9cf] cursor-pointer' : 'cursor-default'}`}>
-            <span className="absolute inset-0 flex items-center justify-center text-[#a7d1e9] text-4xl font-thin leading-none select-none">✕</span>
-            <span className="relative text-[10px] font-extrabold text-[#4a7d97] mt-8">고스트라이더</span>
+            title={canEdit ? '눌러서 자리 열기' : '닫힌 자리입니다'}
+            className={`aspect-square rounded-2xl border-2 border-dashed border-[#b9dcf0] bg-[#e6f2fb] flex items-center justify-center relative overflow-hidden ${canEdit ? 'hover:border-[#8fb9cf] cursor-pointer' : 'cursor-default'}`}>
+            <span className="text-[#a7d1e9] text-4xl font-thin leading-none select-none">✕</span>
           </button>
         );
       }
@@ -1433,7 +1499,15 @@ export default function RaidScheduler() {
       빈 칸을 누르면 자리를 잠글 수 있습니다. 인원이 덜 차도 남는 자리를 잠그면 모집완료가 됩니다.
     </p>
   )}
-</div><div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-[#e6f2fb] text-[#265d75] rounded-2xl font-bold hover:bg-[#d9edf9] text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-[#fff1f4] text-[#e0526a] rounded-2xl font-bold hover:bg-[#ffdde4] text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={slotState.isFull} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${slotState.isFull ? 'bg-[#8fb9cf] cursor-not-allowed' : 'bg-[#17a2d9] hover:bg-[#0e8ec0] active:scale-95'}`}>{slotState.isFull ? '모집 마감' : '참가하기'}</button>)}</div></div></div>)}
+</div>{(isAdmin || selectedRaid?.created_by_email === user.email) && (
+  <button onClick={toggleRaidClosed}
+    className={`w-full mb-2 py-3 rounded-2xl font-bold text-sm transition-all border ${selectedRaid?.is_closed
+      ? 'bg-[#8fa3ae] border-[#8fa3ae] text-white'
+      : 'bg-[#ffffff] border-[#cfe6f5] text-[#4a7d97] hover:bg-[#eef7fe]'}`}>
+    {selectedRaid?.is_closed ? '✅ 마감됨 — 되돌리려면 누르세요' : '🏁 마감하기 (던전 완료)'}
+  </button>
+)}
+<div className="space-y-2">{isJoined ? (<><button onClick={handleAddToCalendar} className="w-full py-3 bg-[#e6f2fb] text-[#265d75] rounded-2xl font-bold hover:bg-[#d9edf9] text-sm flex justify-center items-center gap-2"><Icons.GoogleCal /> 구글 캘린더에 추가</button><button onClick={handleLeave} className="w-full py-4 bg-[#fff1f4] text-[#e0526a] rounded-2xl font-bold hover:bg-[#ffdde4] text-lg transition-all">참가 취소</button></>) : (<button onClick={handleJoin} disabled={slotState.isFull} className={`w-full py-4 text-white rounded-2xl font-bold text-lg transition-all shadow-lg ${slotState.isFull ? 'bg-[#8fb9cf] cursor-not-allowed' : 'bg-[#17a2d9] hover:bg-[#0e8ec0] active:scale-95'}`}>{slotState.isFull ? '모집 마감' : '참가하기'}</button>)}</div></div></div>)}
 
       {/* ★ 롤링페이퍼 작성 모달 */}
       {isPaperModalOpen && (
